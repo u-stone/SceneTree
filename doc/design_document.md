@@ -6,12 +6,13 @@ This document outlines the design and architecture of the SceneTree management s
 
 ## 2. Core Components
 
-The system is composed of four main classes:
+The system is composed of five main classes:
 
 -   `Scene`: Manages a collection of game objects for a specific scene.
 -   `SceneNode`: Represents a node within the scene graph (SceneTree).
 -   `SceneTree`: Represents a hierarchy of `SceneNode`s.
 -   `SceneManager`: A high-level manager for loading, unloading, and switching between scenes.
+-   `SceneIO`: A utility class for serializing and deserializing scene trees to/from JSON.
 
 ## 3. Data Structures and Algorithms
 
@@ -30,10 +31,11 @@ A `SceneNode` is the fundamental building block of the scene graph.
 A `SceneTree` encapsulates a scene graph.
 
 -   **Root Node**: A `std::shared_ptr<SceneNode>` acts as the root of the tree/sub-graph.
--   **Fast Node Lookup**: `std::unordered_map<unsigned int, SceneNode*> m_node_lookup;`. This map provides average O(1) time complexity for finding any node in the tree by its unique ID. The map stores raw pointers for performance, assuming the `SceneTree` itself manages the lifetime of its nodes through the `m_root`'s ownership of all its children.
+-   **Fast Node Lookup**: `std::unordered_map<ObjectId, SceneNode*> m_node_lookup;`. This map provides average O(1) time complexity for finding any node in the tree by its unique `ObjectId`. The map stores raw pointers for performance, assuming the `SceneTree` itself manages the lifetime of its nodes through the `m_root`'s ownership of all its children.
 -   **Name-based Lookup**: `std::unordered_map<std::string, std::vector<SceneNode*>> m_name_lookup;`.
     -   **Global Lookup**: Provides O(1) access to all nodes with a specific name. Supports duplicate names by storing a vector of pointers.
     -   **Scoped Lookup**: Finds nodes by name within a specific subtree. Instead of traversing the subtree (O(N)), it retrieves all nodes with the target name from the global map and checks if they are descendants of the start node (Ancestry Check).
+    -   **Hierarchical Lookup**: Delegates to `SceneNode`'s recursive search for DFS-based lookups (`findFirstChildNodeByName`).
 
 -   **Attach/Detach Algorithm**:
     -   `attach(parentNode, childTree)`:
@@ -49,7 +51,7 @@ A `SceneTree` encapsulates a scene graph.
 
 The `Scene` class acts as a data container for the actual game objects.
 
--   **Object Storage**: `std::unordered_map<unsigned int, SceneObject> m_objects;`. An `unordered_map` is chosen for fast object retrieval by ID, which is essential when a `SceneNode` needs to access its corresponding game object data. This decouples the scene graph's structure (`SceneTree`) from the scene's content (`Scene`). A `SceneNode` refers to a `SceneObject` via its ID.
+-   **Object Storage**: `std::unordered_map<ObjectId, SceneObject> m_objects;`. An `unordered_map` is chosen for fast object retrieval by ID, which is essential when a `SceneNode` needs to access its corresponding game object data. This decouples the scene graph's structure (`SceneTree`) from the scene's content (`Scene`). A `SceneNode` refers to a `SceneObject` via its ID.
 
 ### 3.4. `SceneManager`: High-Level Control
 
@@ -64,12 +66,23 @@ The `SceneManager` orchestrates the overall scene lifecycle.
     4.  Potentially attaching other `SceneTree`s (e.g., a persistent UI scene) to the new active tree.
     5.  Replacing the old `m_active_scene_tree` with the new one. This automatically triggers the destruction of the old tree and all its nodes, correctly decrementing `shared_ptr` counts.
 
+### 3.5. `SceneIO`: Serialization
+
+The `SceneIO` class handles the persistence of scene data.
+
+-   **Format**: JSON (via RapidJSON library).
+-   **Functionality**:
+    -   `saveSceneTree`: Serializes a `SceneTree` structure, including node properties (ID, Name, Status) and hierarchy, to a file.
+    -   `loadSceneTree`: Parses a JSON file to reconstruct a `SceneTree` object.
+
 ## 4. Design Choices and Justification
 
 -   **DAG vs. Tree**: A traditional tree is too restrictive. A DAG allows for more complex and memory-efficient world-building. For example, a single "lantern" `SceneTree` can be attached to multiple posts in a larger "city" scene without duplicating the lantern's data or structure.
 -   **Smart Pointers (`shared_ptr`, `weak_ptr`)**: This is the standard C++ approach for managing complex ownership patterns like a DAG. It automates memory management and prevents common issues like memory leaks from reference cycles and dangling pointers from premature deallocation.
 -   **ID-based Lookups (`unordered_map`)**: Hash maps provide the fastest average-case lookup performance, which is critical for real-time applications like games where finding scene nodes for updates, rendering, or physics is a common operation.
+-   **Strongly Typed IDs (`ObjectId`)**: Encapsulating the ID in a class (`ObjectIdType<T>`) prevents type mismatch errors (e.g., passing an integer where an ID is expected) and allows changing the underlying ID type (e.g., to `std::string` or UUID) with minimal code changes.
 -   **Decoupling of `Scene` and `SceneTree`**: The `Scene` holds the "what" (the data/objects), and the `SceneTree` holds the "where" (the spatial/hierarchical relationships). This separation of concerns makes the system more flexible. For instance, the same `Scene` data could be represented by different `SceneTree` arrangements.
+-   **Serialization Strategy**: Using RapidJSON provides a fast and standard way to interchange data. The recursive structure of the JSON directly maps to the recursive structure of the Scene Tree.
 
 ## 5. Conclusion
 
