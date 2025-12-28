@@ -1,0 +1,15 @@
+# Build artifacts
+/build/
+/compile_commands.json
+
+# Fetched dependencies
+/external/deps/
+
+# Visual Studio Code settings
+.vscode/
+
+# Visual Studio files
+*.sln
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
