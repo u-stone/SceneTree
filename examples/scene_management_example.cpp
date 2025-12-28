@@ -87,6 +87,45 @@ int main() {
                 std::cout << "\nLamp node (ID 101) now has " << lamp_node->getParents().size() << " parents." << std::endl;
             }
 
+            // 6. Demonstrate Shared Subtree (DAG) Lifecycle
+            std::cout << "\n---- Demonstrating Shared Subtree (DAG) Lifecycle ----" << std::endl;
+            
+            // Create a shared node "Gem"
+            auto gem_node = std::make_shared<SceneNode>(999, "Gem");
+            
+            // We want to attach this Gem to both Player (ID 10) and Environment (ID 20)
+            SceneNode* player_ptr = active_tree->findNode(10);
+            SceneNode* env_ptr = active_tree->findNode(20);
+
+            if (player_ptr && env_ptr) {
+                // 1. Attach to Player
+                std::cout << "Attaching Gem to Player..." << std::endl;
+                // We wrap the node in a temporary SceneTree to use the attach API
+                auto gem_tree_1 = std::make_unique<SceneTree>(gem_node);
+                active_tree->attach(player_ptr, std::move(gem_tree_1));
+
+                // 2. Attach to Environment
+                std::cout << "Attaching Gem to Environment..." << std::endl;
+                // We wrap the SAME node in another temporary SceneTree
+                auto gem_tree_2 = std::make_unique<SceneTree>(gem_node); 
+                active_tree->attach(env_ptr, std::move(gem_tree_2));
+
+                active_tree->print();
+
+                // 3. Detach from Player
+                std::cout << "Detaching Gem from Player..." << std::endl;
+                active_tree->detach(player_ptr, gem_node.get());
+                
+                // Verify Gem still exists in the tree (via Environment)
+                if (active_tree->findNode(999)) {
+                    std::cout << "Gem still exists in the tree (reachable via Environment)." << std::endl;
+                } else {
+                    std::cerr << "Error: Gem was incorrectly removed!" << std::endl;
+                }
+                
+                active_tree->print();
+            }
+
         } else {
             std::cerr << "Attach failed!" << std::endl;
         }

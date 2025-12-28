@@ -3,6 +3,7 @@
 #include <vector>
 #include <algorithm>
 #include <iostream>
+#include <unordered_set>
 
 SceneTree::SceneTree(std::shared_ptr<SceneNode> root) : m_root(std::move(root)) {
     if (!m_root) {
@@ -136,6 +137,16 @@ bool SceneTree::attach(SceneNode* parentNode, std::unique_ptr<SceneTree> childTr
         return false;
     }
 
+    // Check for ID collisions before modifying the tree
+    for (auto const& [id, node_ptr] : childTree->m_node_lookup) {
+        auto it = m_node_lookup.find(id);
+        if (it != m_node_lookup.end()) {
+            if (it->second != node_ptr) {
+                return false; // ID collision: same ID but different object instance
+            }
+        }
+    }
+
     // Transfer ownership and structure
     std::shared_ptr<SceneNode> childRoot = childTree->getRoot();
     parentNode->addChild(childRoot);
@@ -166,16 +177,55 @@ std::unique_ptr<SceneTree> SceneTree::detach(SceneNode* parentNode, SceneNode* c
     // The SceneTree constructor will rebuild the node map for the detached subtree.
     auto detachedTree = std::make_unique<SceneTree>(childSharedPtr);
 
-    // Remove the detached nodes from the current tree's lookup map.
+    // DAG Handling:
+    // In a multi-parent scenario, nodes in the detached subtree might still be 
+    // reachable from the main tree root via other parents. We must NOT remove 
+    // those nodes from the lookup maps.
+    
+    std::unordered_set<SceneNode*> retainedNodes;
+
+    // 1. Identify "Entry Points": Nodes in the detached set that have parents 
+    //    still existing in the main tree (and not part of the detached set).
     for (auto const& [id, node_ptr] : detachedTree->m_node_lookup) {
-        m_node_lookup.erase(id);
-        
-        auto it = m_name_lookup.find(node_ptr->getName());
-        if (it != m_name_lookup.end()) {
-            auto& vec = it->second;
-            vec.erase(std::remove(vec.begin(), vec.end(), node_ptr), vec.end());
-            if (vec.empty()) {
-                m_name_lookup.erase(it);
+        for (const auto& weakP : node_ptr->getParents()) {
+            if (auto p = weakP.lock()) {
+                // If parent is in main tree BUT NOT in detached tree
+                if (m_node_lookup.count(p->getId()) && 
+                    detachedTree->m_node_lookup.find(p->getId()) == detachedTree->m_node_lookup.end()) {
+                    retainedNodes.insert(node_ptr);
+                }
+            }
+        }
+    }
+
+    // 2. Propagate retention: If a node is retained, all its descendants must be retained.
+    std::vector<SceneNode*> queue(retainedNodes.begin(), retainedNodes.end());
+    size_t head = 0;
+    while(head < queue.size()){
+        SceneNode* curr = queue[head++];
+        for(auto& child : curr->getChildren()){
+            // If child is in detached tree (it must be) and not yet retained
+            if (detachedTree->m_node_lookup.count(child->getId())) {
+                if (retainedNodes.find(child.get()) == retainedNodes.end()) {
+                    retainedNodes.insert(child.get());
+                    queue.push_back(child.get());
+                }
+            }
+        }
+    }
+
+    // 3. Erase only nodes that are NOT retained
+    for (auto const& [id, node_ptr] : detachedTree->m_node_lookup) {
+        if (retainedNodes.find(node_ptr) == retainedNodes.end()) {
+            m_node_lookup.erase(id);
+            
+            auto it = m_name_lookup.find(node_ptr->getName());
+            if (it != m_name_lookup.end()) {
+                auto& vec = it->second;
+                vec.erase(std::remove(vec.begin(), vec.end(), node_ptr), vec.end());
+                if (vec.empty()) {
+                    m_name_lookup.erase(it);
+                }
             }
         }
     }

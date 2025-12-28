@@ -2,6 +2,17 @@
 #include <algorithm>
 #include <stdexcept>
 
+// Helper to check if 'potentialAncestor' is actually an ancestor of 'node'
+static bool isNodeAncestor(const SceneNode* potentialAncestor, const SceneNode* node) {
+    if (potentialAncestor == node) return true;
+    for (const auto& weakParent : node->getParents()) {
+        if (auto parent = weakParent.lock()) {
+            if (isNodeAncestor(potentialAncestor, parent.get())) return true;
+        }
+    }
+    return false;
+}
+
 SceneNode::SceneNode(unsigned int id, const std::string& name, const std::string& status)
     : m_id(id), m_name(name), m_status(status) {}
 
@@ -27,6 +38,11 @@ void SceneNode::addChild(std::shared_ptr<SceneNode> child) {
     // Check for self-parenting
     if (child.get() == this) {
         throw std::invalid_argument("A node cannot be its own child.");
+    }
+
+    // Check for cycles: ensure 'this' is not an ancestor of 'child'
+    if (isNodeAncestor(child.get(), this)) {
+        throw std::runtime_error("Cycle detected: Cannot add an ancestor as a child.");
     }
     
     m_children.push_back(child);

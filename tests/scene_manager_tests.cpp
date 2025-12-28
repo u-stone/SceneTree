@@ -55,6 +55,18 @@ TEST(SceneNodeTest, AddAndRemoveChild) {
     EXPECT_TRUE(child->getParents().empty());
 }
 
+TEST(SceneNodeTest, DetectCycle) {
+    auto nodeA = std::make_shared<SceneNode>(1, "A");
+    auto nodeB = std::make_shared<SceneNode>(2, "B");
+    auto nodeC = std::make_shared<SceneNode>(3, "C");
+
+    nodeA->addChild(nodeB);
+    nodeB->addChild(nodeC);
+
+    // Try to add A as child of C (A->B->C->A)
+    EXPECT_THROW(nodeC->addChild(nodeA), std::runtime_error);
+}
+
 TEST(SceneTreeTest, FindNode) {
     auto root = std::make_shared<SceneNode>(1, "Root");
     auto child = std::make_shared<SceneNode>(2, "Child");
@@ -291,4 +303,167 @@ TEST(SceneTreeTest, AttachDetachNamingCollision) {
     ASSERT_EQ(foundNodesAfter.size(), 1);
     EXPECT_EQ(foundNodesAfter[0]->getId(), 2);
     EXPECT_EQ(foundNodesAfter[0]->getName(), "CommonName");
+}
+
+TEST(SceneTreeTest, DetachSharedNodeDAG) {
+    // Scenario: Root -> A -> B
+    //           Root -> C -> B
+    // B is shared. If we detach A from Root, B should still be accessible via C.
+
+    auto root = std::make_shared<SceneNode>(1, "Root");
+    auto nodeA = std::make_shared<SceneNode>(2, "A");
+    auto nodeC = std::make_shared<SceneNode>(3, "C");
+    auto nodeB = std::make_shared<SceneNode>(4, "B");
+
+    root->addChild(nodeA);
+    root->addChild(nodeC);
+    nodeA->addChild(nodeB);
+    nodeC->addChild(nodeB);
+
+    auto tree = std::make_unique<SceneTree>(root);
+
+    // Verify initial state
+    EXPECT_NE(tree->findNode(4), nullptr); // B is found
+
+    // Detach A from Root
+    auto detachedTree = tree->detach(root.get(), nodeA.get());
+
+    // A should be gone from main tree
+    EXPECT_EQ(tree->findNode(2), nullptr);
+
+    // B should STILL be in main tree because it's a child of C
+    EXPECT_NE(tree->findNode(4), nullptr);
+
+    // Verify detached tree contains A and B
+    EXPECT_NE(detachedTree->findNode(2), nullptr);
+    EXPECT_NE(detachedTree->findNode(4), nullptr);
+}
+
+TEST(SceneTreeTest, AttachIDCollision) {
+    // Tree A: Root(1) -> Child(2)
+    auto rootA = std::make_shared<SceneNode>(1, "RootA");
+    auto childA = std::make_shared<SceneNode>(2, "Child");
+    rootA->addChild(childA);
+    auto treeA = std::make_unique<SceneTree>(rootA);
+
+    // Tree B: Root(10) -> Child(2) [Different object, same ID]
+    auto rootB = std::make_shared<SceneNode>(10, "RootB");
+    auto childB = std::make_shared<SceneNode>(2, "ChildCollision");
+    rootB->addChild(childB);
+    auto treeB = std::make_unique<SceneTree>(rootB);
+
+    // Attempt attach
+    bool result = treeA->attach(rootA.get(), std::move(treeB));
+    
+    // Should fail due to ID 2 collision
+    EXPECT_FALSE(result);
+    
+    // Verify treeA state is unchanged
+    EXPECT_EQ(rootA->getChildren().size(), 1);
+    EXPECT_EQ(rootA->getChildren()[0], childA);
+}
+
+TEST(SceneTreeTest, DAG_Diamond_AttachTwice) {
+    // Construct a Diamond: Root -> A -> Shared
+    //                       Root -> B -> Shared
+    
+    auto root = std::make_shared<SceneNode>(1, "Root");
+    auto nodeA = std::make_shared<SceneNode>(2, "A");
+    auto nodeB = std::make_shared<SceneNode>(3, "B");
+    auto shared = std::make_shared<SceneNode>(4, "Shared");
+
+    root->addChild(nodeA);
+    root->addChild(nodeB);
+
+    auto tree = std::make_unique<SceneTree>(root);
+
+    // 1. Attach Shared to A
+    // We need to wrap Shared in a SceneTree to use attach
+    auto treeWrapper1 = std::make_unique<SceneTree>(shared);
+    EXPECT_TRUE(tree->attach(nodeA.get(), std::move(treeWrapper1)));
+
+    // Verify A -> Shared
+    EXPECT_EQ(nodeA->getChildren().size(), 1);
+    EXPECT_EQ(nodeA->getChildren()[0], shared);
+    EXPECT_EQ(shared->getParents().size(), 1);
+
+    // 2. Attach Shared to B
+    // Wrap the SAME shared node in a new SceneTree wrapper
+    auto treeWrapper2 = std::make_unique<SceneTree>(shared);
+    EXPECT_TRUE(tree->attach(nodeB.get(), std::move(treeWrapper2)));
+
+    // Verify B -> Shared
+    EXPECT_EQ(nodeB->getChildren().size(), 1);
+    EXPECT_EQ(nodeB->getChildren()[0], shared);
+    
+    // Verify Shared has 2 parents
+    EXPECT_EQ(shared->getParents().size(), 2);
+
+    // Verify Lookup
+    EXPECT_EQ(tree->findNode(4), shared.get());
+
+    // 3. Detach from A
+    auto detached1 = tree->detach(nodeA.get(), shared.get());
+    
+    // Shared should still be in the tree (reachable via B)
+    EXPECT_NE(tree->findNode(4), nullptr);
+    EXPECT_EQ(shared->getParents().size(), 1); // Only B left
+    
+    // 4. Detach from B
+    auto detached2 = tree->detach(nodeB.get(), shared.get());
+
+    // Shared should now be gone from the tree
+    EXPECT_EQ(tree->findNode(4), nullptr);
+    EXPECT_EQ(shared->getParents().size(), 0);
+}
+
+TEST(SceneTreeTest, SharedNode_Across_Two_Trees) {
+    // Tree 1: Root1 -> Shared
+    // Tree 2: Root2 -> Shared
+    // Modifying Shared in Tree 1 should reflect in Tree 2
+
+    auto root1 = std::make_shared<SceneNode>(1, "Root1");
+    auto root2 = std::make_shared<SceneNode>(2, "Root2");
+    auto shared = std::make_shared<SceneNode>(3, "Shared", "active");
+
+    auto tree1 = std::make_unique<SceneTree>(root1);
+    auto tree2 = std::make_unique<SceneTree>(root2);
+
+    // Attach to Tree 1
+    auto wrapper1 = std::make_unique<SceneTree>(shared);
+    tree1->attach(root1.get(), std::move(wrapper1));
+
+    // Attach to Tree 2
+    auto wrapper2 = std::make_unique<SceneTree>(shared);
+    tree2->attach(root2.get(), std::move(wrapper2));
+
+    // Verify existence
+    EXPECT_NE(tree1->findNode(3), nullptr);
+    EXPECT_NE(tree2->findNode(3), nullptr);
+
+    // Modify via Tree 1
+    SceneNode* nodeInTree1 = tree1->findNode(3);
+    nodeInTree1->setStatus("inactive");
+
+    // Check via Tree 2
+    SceneNode* nodeInTree2 = tree2->findNode(3);
+    EXPECT_EQ(nodeInTree2->getStatus(), "inactive");
+    EXPECT_EQ(nodeInTree1, nodeInTree2); // Should be same pointer
+}
+
+TEST(SceneTreeTest, AttachCycleDetection) {
+    // Root -> A
+    // Try to attach Root to A (Cycle)
+    
+    auto root = std::make_shared<SceneNode>(1, "Root");
+    auto nodeA = std::make_shared<SceneNode>(2, "A");
+    root->addChild(nodeA);
+    
+    auto tree = std::make_unique<SceneTree>(root);
+    
+    // Wrap root in a new tree to try and attach it to A
+    auto wrapper = std::make_unique<SceneTree>(root);
+    
+    // attach(parentNode, childTree) -> nodeA->addChild(root) -> Should throw Cycle Detected
+    EXPECT_THROW(tree->attach(nodeA.get(), std::move(wrapper)), std::runtime_error);
 }
