@@ -1,4 +1,5 @@
 #include "SceneNode.h"
+#include "SceneObject.h"
 #include <algorithm>
 #include <stdexcept>
 
@@ -13,7 +14,7 @@ static bool isNodeAncestor(const SceneNode* potentialAncestor, const SceneNode* 
     return false;
 }
 
-SceneNode::SceneNode(unsigned int id, const std::string& name, const std::string& status)
+SceneNode::SceneNode(unsigned int id, const std::string& name, ObjectStatus status)
     : m_id(id), m_name(name), m_status(status) {}
 
 unsigned int SceneNode::getId() const {
@@ -24,11 +25,11 @@ const std::string& SceneNode::getName() const {
     return m_name;
 }
 
-const std::string& SceneNode::getStatus() const {
+ObjectStatus SceneNode::getStatus() const {
     return m_status;
 }
 
-void SceneNode::setStatus(const std::string& status) {
+void SceneNode::setStatus(ObjectStatus status) {
     m_status = status;
 }
 

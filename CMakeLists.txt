@@ -5,6 +5,22 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# --- Address Sanitizer (ASan) Support ---
+option(USE_ASAN "Enable Address Sanitizer for memory safety debugging" ON)
+if(USE_ASAN)
+    message(STATUS "Address Sanitizer (ASan) enabled")
+    if(MSVC)
+        # MSVC-specific ASan flags (requires VS 2019 16.9+)
+        # /Zi is required for debug symbols, /INCREMENTAL:NO is recommended for ASan
+        add_compile_options(/fsanitize=address /Zi)
+        add_link_options(/fsanitize=address /INCREMENTAL:NO)
+    else()
+        # GCC/Clang-specific ASan flags
+        add_compile_options(-fsanitize=address -fno-omit-frame-pointer)
+        add_link_options(-fsanitize=address)
+    endif()
+endif()
+
 # --- Subdirectories ---
 add_subdirectory(src)
 add_subdirectory(examples)

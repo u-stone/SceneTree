@@ -45,10 +45,10 @@ int main() {
             active_tree->print();
 
             // 4. Find a node and update its status
-            std::cout << "\n---- Finding Lamp (ID: 101) and setting status to 'broken' ----" << std::endl;
+            std::cout << "\n---- Finding Lamp (ID: 101) and setting status to 'Broken' ----" << std::endl;
             SceneNode* lamp_node = active_tree->findNode(101);
             if (lamp_node) {
-                lamp_node->setStatus("broken");
+                lamp_node->setStatus(ObjectStatus::Broken);
                 std::cout << "Lamp status updated. Final Tree:" << std::endl;
                 active_tree->print();
             } else {

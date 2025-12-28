@@ -3,9 +3,11 @@
 
 Scene::Scene(std::string name) : m_name(std::move(name)) {}
 
-SceneObject* Scene::addObject(unsigned int id, const std::string& name, const std::string& status) {
+SceneObject* Scene::addObject(unsigned int id, const std::string& name, ObjectStatus status, unsigned int parentId) {
     auto [it, success] = m_objects.try_emplace(id, SceneObject{id, name, status});
     if (success) {
+        m_insertion_order.push_back(id);
+        m_relationships[id] = parentId;
         return &it->second;
     }
     return nullptr; // Object with this ID already exists
@@ -20,7 +22,12 @@ SceneObject* Scene::getObject(unsigned int id) {
 }
 
 bool Scene::removeObject(unsigned int id) {
-    return m_objects.erase(id) > 0;
+    if (m_objects.erase(id) > 0) {
+        m_insertion_order.erase(std::remove(m_insertion_order.begin(), m_insertion_order.end(), id), m_insertion_order.end());
+        m_relationships.erase(id);
+        return true;
+    }
+    return false;
 }
 
 const std::string& Scene::getName() const {
@@ -29,11 +36,14 @@ const std::string& Scene::getName() const {
 
 std::vector<SceneObject*> Scene::getAllObjects() const {
     std::vector<SceneObject*> objects;
-    objects.reserve(m_objects.size());
-    for (const auto& pair : m_objects) {
-        // C++17 doesn't allow direct conversion from const value_type to non-const value_type
-        // so we need to find the object again to get a non-const pointer.
-        objects.push_back(const_cast<SceneObject*>(&pair.second));
+    objects.reserve(m_insertion_order.size());
+    for (unsigned int id : m_insertion_order) {
+        objects.push_back(const_cast<SceneObject*>(&m_objects.at(id)));
     }
     return objects;
+}
+
+unsigned int Scene::getParentId(unsigned int id) const {
+    auto it = m_relationships.find(id);
+    return (it != m_relationships.end()) ? it->second : 0;
 }

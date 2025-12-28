@@ -14,14 +14,14 @@ protected:
         // Create and register a main scene
         auto main_scene = std::make_shared<Scene>("MainScene");
         main_scene->addObject(1, "Root");
-        main_scene->addObject(2, "Player");
-        main_scene->addObject(3, "Enemy");
+        main_scene->addObject(2, "Player", ObjectStatus::Active, 1);
+        main_scene->addObject(3, "Enemy", ObjectStatus::Active, 1);
         manager->registerScene(main_scene);
 
         // Create and register a sub-scene
         auto sub_scene = std::make_shared<Scene>("SubScene");
         sub_scene->addObject(10, "SubRoot");
-        sub_scene->addObject(11, "Item");
+        sub_scene->addObject(11, "Item", ObjectStatus::Active, 10);
         manager->registerScene(sub_scene);
     }
 
@@ -29,10 +29,10 @@ protected:
 };
 
 TEST(SceneNodeTest, Creation) {
-    auto node = std::make_shared<SceneNode>(1, "TestNode", "active");
+    auto node = std::make_shared<SceneNode>(1, "TestNode", ObjectStatus::Active);
     EXPECT_EQ(node->getId(), 1);
     EXPECT_EQ(node->getName(), "TestNode");
-    EXPECT_EQ(node->getStatus(), "active");
+    EXPECT_EQ(node->getStatus(), ObjectStatus::Active);
     EXPECT_TRUE(node->getChildren().empty());
     EXPECT_TRUE(node->getParents().empty());
 }
@@ -424,7 +424,7 @@ TEST(SceneTreeTest, SharedNode_Across_Two_Trees) {
 
     auto root1 = std::make_shared<SceneNode>(1, "Root1");
     auto root2 = std::make_shared<SceneNode>(2, "Root2");
-    auto shared = std::make_shared<SceneNode>(3, "Shared", "active");
+    auto shared = std::make_shared<SceneNode>(3, "Shared", ObjectStatus::Active);
 
     auto tree1 = std::make_unique<SceneTree>(root1);
     auto tree2 = std::make_unique<SceneTree>(root2);
@@ -443,11 +443,11 @@ TEST(SceneTreeTest, SharedNode_Across_Two_Trees) {
 
     // Modify via Tree 1
     SceneNode* nodeInTree1 = tree1->findNode(3);
-    nodeInTree1->setStatus("inactive");
+    nodeInTree1->setStatus(ObjectStatus::Inactive);
 
     // Check via Tree 2
     SceneNode* nodeInTree2 = tree2->findNode(3);
-    EXPECT_EQ(nodeInTree2->getStatus(), "inactive");
+    EXPECT_EQ(nodeInTree2->getStatus(), ObjectStatus::Inactive);
     EXPECT_EQ(nodeInTree1, nodeInTree2); // Should be same pointer
 }
 
@@ -466,4 +466,45 @@ TEST(SceneTreeTest, AttachCycleDetection) {
     
     // attach(parentNode, childTree) -> nodeA->addChild(root) -> Should throw Cycle Detected
     EXPECT_THROW(tree->attach(nodeA.get(), std::move(wrapper)), std::runtime_error);
+}
+
+TEST(SceneTreeTest, CreateFromSceneWithHierarchy) {
+    Scene scene("ComplexScene");
+    // ID 1: Root
+    // ID 2: Child of 1
+    // ID 3: Child of 2
+    // ID 4: Another child of 1
+    scene.addObject(1, "Root");
+    scene.addObject(2, "Child1", ObjectStatus::Active, 1);
+    scene.addObject(3, "Grandchild", ObjectStatus::Active, 2);
+    scene.addObject(4, "Child2", ObjectStatus::Active, 1);
+
+    auto tree = SceneTree::createFromScene(scene);
+    ASSERT_NE(tree, nullptr);
+    
+    auto root = tree->getRoot();
+    EXPECT_EQ(root->getId(), 1);
+    
+    // Verify hierarchy reconstruction
+    auto child1 = tree->findNode(2);
+    auto child2 = tree->findNode(4);
+    auto grandchild = tree->findNode(3);
+    
+    ASSERT_NE(child1, nullptr);
+    ASSERT_NE(child2, nullptr);
+    ASSERT_NE(grandchild, nullptr);
+    
+    EXPECT_EQ(child1->getParents()[0].lock().get(), root.get());
+    EXPECT_EQ(child2->getParents()[0].lock().get(), root.get());
+    EXPECT_EQ(grandchild->getParents()[0].lock().get(), child1);
+}
+
+TEST(SceneTreeTest, CreateFromSceneDeterministicRoot) {
+    Scene scene("OrderedScene");
+    scene.addObject(3, "FirstAdded");
+    scene.addObject(1, "SecondAdded");
+
+    auto tree = SceneTree::createFromScene(scene);
+    ASSERT_NE(tree, nullptr);
+    EXPECT_EQ(tree->getRoot()->getId(), 3); // Should be the first one added
 }

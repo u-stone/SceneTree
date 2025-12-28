@@ -19,24 +19,28 @@ std::unique_ptr<SceneTree> SceneTree::createFromScene(const Scene& scene) {
         return nullptr;
     }
 
-    // Assume the first object is the root, a common convention.
-    // A more robust implementation might look for an object with no parent pointers.
-    auto root_obj = objects[0];
-    auto root_node = std::make_shared<SceneNode>(root_obj->id, root_obj->name, root_obj->status);
-    
-    auto tree = std::make_unique<SceneTree>(root_node);
+    std::unordered_map<unsigned int, std::shared_ptr<SceneNode>> node_map;
+    std::shared_ptr<SceneNode> root = nullptr;
 
-    // This is a simplified creation. A real implementation would need to know the hierarchy
-    // from the scene data itself. Here we just add all other objects as direct children of the root.
-    for (size_t i = 1; i < objects.size(); ++i) {
-        auto obj = objects[i];
-        auto node = std::make_shared<SceneNode>(obj->id, obj->name, obj->status);
-        tree->m_root->addChild(node);
-        tree->m_node_lookup[node->getId()] = node.get();
-        tree->m_name_lookup[node->getName()].push_back(node.get());
+    // First pass: Create all nodes
+    for (auto* obj : objects) {
+        node_map[obj->id] = std::make_shared<SceneNode>(obj->id, obj->name, obj->status);
     }
 
-    return tree;
+    // Second pass: Build hierarchy
+    for (auto* obj : objects) {
+        unsigned int parentId = scene.getParentId(obj->id);
+        auto currentNode = node_map[obj->id];
+
+        if (parentId == 0 || node_map.find(parentId) == node_map.end()) {
+            // If no parent or parent not in this scene, it's a root candidate
+            if (!root) root = currentNode; 
+        } else {
+            node_map[parentId]->addChild(currentNode);
+        }
+    }
+
+    return root ? std::make_unique<SceneTree>(root) : nullptr;
 }
 
 
