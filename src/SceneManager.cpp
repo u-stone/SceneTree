@@ -47,7 +47,7 @@ SceneTree* SceneManager::getActiveSceneTree() const {
     return m_active_scene_tree.get();
 }
 
-bool SceneManager::attachScene(const std::string& parentSceneName, const std::string& childSceneName, unsigned int parentNodeId) {
+bool SceneManager::attachScene(const std::string& parentSceneName, const std::string& childSceneName, ObjectId parentNodeId) {
     if (!m_active_scene_tree || m_active_scene_tree->getRoot()->getName() != parentSceneName) {
         // This advanced operation requires the parent scene to be the active one
         if (!switchToScene(parentSceneName)) {

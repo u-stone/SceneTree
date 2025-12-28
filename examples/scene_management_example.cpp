@@ -1,6 +1,8 @@
 #include <iostream>
 #include <stdexcept>
+#include <filesystem>
 #include "SceneManager.h"
+#include "SceneIO.h"
 
 int main() {
     try {
@@ -140,6 +142,29 @@ int main() {
                 }
                 
                 active_tree->print();
+            }
+
+            // 7. Demonstrate SceneIO (Save and Load)
+            std::cout << "\n---- Demonstrating SceneIO: Saving and Loading ----" << std::endl;
+            
+            std::filesystem::path dataDir("data");
+            if (!std::filesystem::exists(dataDir)) {
+                std::filesystem::create_directory(dataDir);
+            }
+            std::string filename = (dataDir / "example_scene_dump.json").string();
+            
+            if (SceneIO::saveSceneTree(*active_tree, filename)) {
+                std::cout << "Successfully saved scene tree to " << filename << std::endl;
+                
+                auto loaded_tree = SceneIO::loadSceneTree(filename);
+                if (loaded_tree) {
+                    std::cout << "Successfully loaded scene tree from " << filename << ". Structure:" << std::endl;
+                    loaded_tree->print();
+                } else {
+                    std::cerr << "Failed to load scene tree." << std::endl;
+                }
+            } else {
+                std::cerr << "Failed to save scene tree." << std::endl;
             }
 
         } else {

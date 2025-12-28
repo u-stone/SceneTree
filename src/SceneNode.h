@@ -7,9 +7,9 @@
 
 class SceneNode : public std::enable_shared_from_this<SceneNode> {
 public:
-    SceneNode(unsigned int id, const std::string& name, ObjectStatus status = ObjectStatus::Active);
+    SceneNode(ObjectId id, const std::string& name, ObjectStatus status = ObjectStatus::Active);
 
-    unsigned int getId() const;
+    ObjectId getId() const;
     const std::string& getName() const;
     ObjectStatus getStatus() const;
     void setStatus(ObjectStatus status);
@@ -29,7 +29,7 @@ private:
     void addParent(std::weak_ptr<SceneNode> parent);
     void removeParent(const std::weak_ptr<SceneNode>& parent);
 
-    unsigned int m_id;
+    ObjectId m_id;
     std::string m_name;
     ObjectStatus m_status;
     std::vector<std::shared_ptr<SceneNode>> m_children;

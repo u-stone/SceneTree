@@ -10,17 +10,17 @@ class Scene {
 public:
     explicit Scene(std::string name);
 
-    SceneObject* addObject(unsigned int id, const std::string& name, ObjectStatus status = ObjectStatus::Active, unsigned int parentId = 0);
-    SceneObject* getObject(unsigned int id);
-    bool removeObject(unsigned int id);
+    SceneObject* addObject(ObjectId id, const std::string& name, ObjectStatus status = ObjectStatus::Active, ObjectId parentId = 0);
+    SceneObject* getObject(ObjectId id);
+    bool removeObject(ObjectId id);
 
     const std::string& getName() const;
     std::vector<SceneObject*> getAllObjects() const;
-    unsigned int getParentId(unsigned int id) const;
+    ObjectId getParentId(ObjectId id) const;
 
 private:
     std::string m_name;
-    std::unordered_map<unsigned int, SceneObject> m_objects;
-    std::vector<unsigned int> m_insertion_order;
-    std::unordered_map<unsigned int, unsigned int> m_relationships;
+    std::unordered_map<ObjectId, SceneObject> m_objects;
+    std::vector<ObjectId> m_insertion_order;
+    std::unordered_map<ObjectId, ObjectId> m_relationships;
 };

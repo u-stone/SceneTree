@@ -43,6 +43,23 @@ FetchContent_Declare(
 set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(googletest)
 
+# --- RapidJSON ---
+FetchContent_Declare(
+  rapidjson
+  URL https://github.com/Tencent/rapidjson/archive/refs/tags/v1.1.0.zip
+  DOWNLOAD_EXTRACT_TIMESTAMP true
+)
+set(RAPIDJSON_BUILD_DOC OFF CACHE BOOL "" FORCE)
+set(RAPIDJSON_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(RAPIDJSON_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(rapidjson)
+
+# RapidJSON v1.1.0 does not define a CMake target, so we define one manually.
+if(NOT TARGET rapidjson)
+    add_library(rapidjson INTERFACE)
+    target_include_directories(rapidjson INTERFACE ${rapidjson_SOURCE_DIR}/include)
+endif()
+
 # --- Testing ---
 enable_testing()
 add_subdirectory(tests)

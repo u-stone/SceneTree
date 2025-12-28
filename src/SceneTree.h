@@ -11,7 +11,7 @@ public:
 
     static std::unique_ptr<SceneTree> createFromScene(const Scene& scene);
 
-    SceneNode* findNode(unsigned int id);
+    SceneNode* findNode(ObjectId id);
     
     // Find nodes by name (delegates to SceneNode's recursive search)
     std::shared_ptr<SceneNode> findNodeByName(const std::string& name) const;
@@ -38,6 +38,6 @@ private:
 
 
     std::shared_ptr<SceneNode> m_root;
-    std::unordered_map<unsigned int, SceneNode*> m_node_lookup;
+    std::unordered_map<ObjectId, SceneNode*> m_node_lookup;
     std::unordered_map<std::string, std::vector<SceneNode*>> m_name_lookup;
 };

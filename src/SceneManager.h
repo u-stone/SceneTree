@@ -17,7 +17,7 @@ public:
     SceneTree* getActiveSceneTree() const;
     
     // Advanced usage: Allows attaching one loaded scene to another
-    bool attachScene(const std::string& parentSceneName, const std::string& childSceneName, unsigned int parentNodeId);
+    bool attachScene(const std::string& parentSceneName, const std::string& childSceneName, ObjectId parentNodeId);
 
 
 private:

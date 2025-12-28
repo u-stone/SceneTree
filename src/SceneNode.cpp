@@ -14,10 +14,10 @@ static bool isNodeAncestor(const SceneNode* potentialAncestor, const SceneNode* 
     return false;
 }
 
-SceneNode::SceneNode(unsigned int id, const std::string& name, ObjectStatus status)
+SceneNode::SceneNode(ObjectId id, const std::string& name, ObjectStatus status)
     : m_id(id), m_name(name), m_status(status) {}
 
-unsigned int SceneNode::getId() const {
+ObjectId SceneNode::getId() const {
     return m_id;
 }
 

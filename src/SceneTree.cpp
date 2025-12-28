@@ -19,7 +19,7 @@ std::unique_ptr<SceneTree> SceneTree::createFromScene(const Scene& scene) {
         return nullptr;
     }
 
-    std::unordered_map<unsigned int, std::shared_ptr<SceneNode>> node_map;
+    std::unordered_map<ObjectId, std::shared_ptr<SceneNode>> node_map;
     std::shared_ptr<SceneNode> root = nullptr;
 
     // First pass: Create all nodes
@@ -29,7 +29,7 @@ std::unique_ptr<SceneTree> SceneTree::createFromScene(const Scene& scene) {
 
     // Second pass: Build hierarchy
     for (auto* obj : objects) {
-        unsigned int parentId = scene.getParentId(obj->id);
+        ObjectId parentId = scene.getParentId(obj->id);
         auto currentNode = node_map[obj->id];
 
         if (parentId == 0 || node_map.find(parentId) == node_map.end()) {
@@ -44,7 +44,7 @@ std::unique_ptr<SceneTree> SceneTree::createFromScene(const Scene& scene) {
 }
 
 
-SceneNode* SceneTree::findNode(unsigned int id) {
+SceneNode* SceneTree::findNode(ObjectId id) {
     auto it = m_node_lookup.find(id);
     if (it != m_node_lookup.end()) {
         return it->second;

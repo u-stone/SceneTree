@@ -2,6 +2,9 @@
 
 add_executable(scene_manager_tests
     scene_manager_tests.cpp
+    scene_node_tests.cpp
+    scene_tree_tests.cpp
+    scene_io_tests.cpp
 )
 
 # Link the tests against our library and Google Test
@@ -24,4 +27,3 @@ gtest_discover_tests(scene_manager_tests)
 
 # Set the folder for Visual Studio
 set_property(TARGET scene_manager_tests PROPERTY FOLDER "Tests")
-
