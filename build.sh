@@ -20,11 +20,11 @@ cd build
 
 # Configure the project with CMake using the Xcode generator
 echo "---- Configuring project with CMake (Xcode) ----"
-cmake .. -G Xcode -DUSE_ASAN=ON > /dev/null
+cmake .. -G Xcode -DUSE_ASAN=ON
 
 # Build the project (Release configuration)
 echo "---- Building project (Release) ----"
-cmake --build . --config Release > /dev/null
+cmake --build . --config Release
 
 # Run tests
 echo "---- Running tests ----"

@@ -15,6 +15,7 @@ public:
     
     // Find nodes by name (delegates to SceneNode's recursive search)
     std::shared_ptr<SceneNode> findNodeByName(const std::string& name) const;
+    std::shared_ptr<SceneNode> findFirstChildNodeByName(const std::string& name) const;
     std::vector<std::shared_ptr<SceneNode>> findAllNodesByName(const std::string& name) const;
 
     // Overloads to start finding from a specific node

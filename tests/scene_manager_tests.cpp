@@ -266,6 +266,78 @@ TEST(SceneTreeTest, FindNodeByNameScoped) {
     EXPECT_EQ(foundRoot, nullptr);
 }
 
+TEST(SceneTreeTest, FindFirstChildNodeByName) {
+    auto root = std::make_shared<SceneNode>(1, "Root");
+    auto branch = std::make_shared<SceneNode>(2, "Branch");
+    auto leaf = std::make_shared<SceneNode>(3, "Leaf");
+    auto otherLeaf = std::make_shared<SceneNode>(4, "Leaf"); // Duplicate name
+    
+    root->addChild(branch);
+    branch->addChild(leaf);
+    root->addChild(otherLeaf);
+    
+    auto tree = std::make_unique<SceneTree>(root);
+    
+    // Should find root
+    EXPECT_EQ(tree->findFirstChildNodeByName("Root"), root);
+    // Should find nested leaf (DFS order)
+    EXPECT_EQ(tree->findFirstChildNodeByName("Leaf"), leaf);
+    // Should return nullptr for non-existent
+    EXPECT_EQ(tree->findFirstChildNodeByName("NonExistent"), nullptr);
+}
+
+TEST(SceneTreeTest, FindFirstChildNodeByNameAfterAttachDetach) {
+    // Setup Tree A: RootA -> ChildA
+    auto rootA = std::make_shared<SceneNode>(1, "RootA");
+    auto childA = std::make_shared<SceneNode>(2, "ChildA");
+    rootA->addChild(childA);
+    auto treeA = std::make_unique<SceneTree>(rootA);
+
+    // Setup Tree B: RootB -> Target
+    auto rootB = std::make_shared<SceneNode>(10, "RootB");
+    auto target = std::make_shared<SceneNode>(11, "Target");
+    rootB->addChild(target);
+    auto treeB = std::make_unique<SceneTree>(rootB);
+
+    // 1. Before attach: Tree A should NOT find "Target"
+    EXPECT_EQ(treeA->findFirstChildNodeByName("Target"), nullptr);
+
+    // 2. After attach: Tree A SHOULD find "Target"
+    treeA->attach(childA.get(), std::move(treeB));
+    EXPECT_EQ(treeA->findFirstChildNodeByName("Target"), target);
+
+    // 3. After detach: Tree A should NOT find "Target", but the detached tree SHOULD
+    auto detached = treeA->detach(childA.get(), rootB.get());
+    EXPECT_EQ(treeA->findFirstChildNodeByName("Target"), nullptr);
+    ASSERT_NE(detached, nullptr);
+    EXPECT_EQ(detached->findFirstChildNodeByName("Target"), target);
+}
+
+TEST(SceneTreeTest, FindFirstChildNodeByNameDAG) {
+    // Scenario: Root -> A -> Target
+    //           Root -> B -> Target
+    auto root = std::make_shared<SceneNode>(1, "Root");
+    auto nodeA = std::make_shared<SceneNode>(2, "A");
+    auto nodeB = std::make_shared<SceneNode>(3, "B");
+    auto target = std::make_shared<SceneNode>(4, "Target");
+
+    root->addChild(nodeA);
+    root->addChild(nodeB);
+    nodeA->addChild(target);
+    nodeB->addChild(target);
+
+    auto tree = std::make_unique<SceneTree>(root);
+
+    // Initially found via DFS (likely via A)
+    EXPECT_EQ(tree->findFirstChildNodeByName("Target"), target);
+
+    // Detach A from Root. Target is still reachable via Root -> B -> Target
+    tree->detach(root.get(), nodeA.get());
+    
+    // Should still be found hierarchically
+    EXPECT_EQ(tree->findFirstChildNodeByName("Target"), target);
+}
+
 TEST(SceneTreeTest, AttachDetachNamingCollision) {
     // 1. Setup Tree A with a node named "CommonName"
     auto rootA = std::make_shared<SceneNode>(1, "RootA");

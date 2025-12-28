@@ -10,17 +10,17 @@ int main() {
         // Create a "World" scene
         auto world_scene = std::make_shared<Scene>("World");
         world_scene->addObject(1, "WorldRoot");
-        world_scene->addObject(10, "Player");
-        world_scene->addObject(20, "Environment");
-        world_scene->addObject(21, "Ground");
-        world_scene->addObject(22, "Sky");
-        world_scene->addObject(23, "Lamp"); // Add a duplicate name to demonstrate lookup features
+        world_scene->addObject(10, "Player", ObjectStatus::Active, 1);
+        world_scene->addObject(20, "Environment", ObjectStatus::Active, 1);
+        world_scene->addObject(21, "Ground", ObjectStatus::Active, 20);
+        world_scene->addObject(22, "Sky", ObjectStatus::Active, 20);
+        world_scene->addObject(23, "Lamp", ObjectStatus::Active, 20); // Add a duplicate name to demonstrate lookup features
 
         // Create a "Props" scene that can be attached
         auto props_scene = std::make_shared<Scene>("Props");
         props_scene->addObject(100, "PropsRoot");
-        props_scene->addObject(101, "Lamp");
-        props_scene->addObject(102, "Bench");
+        props_scene->addObject(101, "Lamp", ObjectStatus::Active, 100);
+        props_scene->addObject(102, "Bench", ObjectStatus::Active, 100);
         
         // Register scenes with the manager
         manager->registerScene(world_scene);
@@ -71,6 +71,22 @@ int main() {
                 if (scoped_lamp) {
                     std::cout << "Found scoped Lamp: ID " << scoped_lamp->getId() << " (Expected ID 101 from Props scene)" << std::endl;
                 }
+            }
+
+            // 4.3. Demonstrate Hierarchical Lookup (New Feature)
+            std::cout << "\n---- Finding first child node named 'Ground' (Hierarchical Lookup) ----" << std::endl;
+            auto ground_node = active_tree->findFirstChildNodeByName("Ground");
+            if (ground_node) {
+                std::cout << "Found Ground node: ID " << ground_node->getId() << " (Status: " << ground_node->getStatus() << ")" << std::endl;
+            }
+
+            // 4.4. Demonstrate Hierarchical Lookup after Detach
+            std::cout << "\n---- Detaching PropsRoot (ID: 100) and searching for 'Lamp' again ----" << std::endl;
+            auto props_root = active_tree->findNode(100);
+            auto env_node_ptr = active_tree->findNode(20);
+            if (props_root && env_node_ptr) {
+                auto detached_props = active_tree->detach(env_node_ptr, props_root);
+                std::cout << "Hierarchical search for 'Lamp' in World Tree: " << (active_tree->findFirstChildNodeByName("Lamp") ? "Found" : "Not Found") << std::endl;
             }
 
             // 5. Demonstrate multi-parenting

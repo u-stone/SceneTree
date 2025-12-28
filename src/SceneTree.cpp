@@ -60,6 +60,12 @@ std::shared_ptr<SceneNode> SceneTree::findNodeByName(const std::string& name) co
     return nullptr;
 }
 
+std::shared_ptr<SceneNode> SceneTree::findFirstChildNodeByName(const std::string& name) const {
+    if (!m_root) return nullptr;
+    if (m_root->getName() == name) return m_root;
+    return m_root->findFirstChildNodeByName(name);
+}
+
 std::vector<std::shared_ptr<SceneNode>> SceneTree::findAllNodesByName(const std::string& name) const {
     std::vector<std::shared_ptr<SceneNode>> results;
     auto it = m_name_lookup.find(name);
