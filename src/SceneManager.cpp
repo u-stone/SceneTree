@@ -10,6 +10,10 @@ void SceneManager::registerScene(std::shared_ptr<Scene> scene) {
 }
 
 bool SceneManager::switchToScene(const std::string& sceneName) {
+    if (m_active_scene_name == sceneName) {
+        return true;
+    }
+
     auto it = m_scenes.find(sceneName);
     if (it == m_scenes.end()) {
         return false; // Scene not found
@@ -21,11 +25,13 @@ bool SceneManager::switchToScene(const std::string& sceneName) {
     if (new_tree) {
         // The old m_active_scene_tree will be automatically deallocated
         m_active_scene_tree = std::move(new_tree);
+        m_active_scene_name = sceneName;
         return true;
     }
 
     // If scene was empty, clear the active tree
     m_active_scene_tree.reset();
+    m_active_scene_name.clear();
     return true;
 }
 

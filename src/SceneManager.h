@@ -23,4 +23,5 @@ public:
 private:
     std::unordered_map<std::string, std::shared_ptr<Scene>> m_scenes;
     std::unique_ptr<SceneTree> m_active_scene_tree;
+    std::string m_active_scene_name;
 };
