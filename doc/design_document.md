@@ -21,6 +21,7 @@ A `SceneNode` is the fundamental building block of the scene graph.
 
 -   **ID, Name, Status**: Basic properties for identification and state management. The `id` is the key that links a `SceneNode` to a `SceneObject`.
 -   **Parent-Child Relationships**: To implement a DAG, a node must be ableto have multiple parents.
+-   **Parent-Child Relationships**: To implement a DAG, a node must be able to have multiple parents.
     -   `m_children`: `std::vector<std::shared_ptr<SceneNode>>`. Children are owned by their parents. `std::shared_ptr` is used because a child node's lifetime is tied to all its parents. It will only be destroyed when the last parent referencing it is destroyed.
     -   `m_parents`: `std::vector<std::weak_ptr<SceneNode>>`. `std::weak_ptr` is crucial here to prevent circular references. If a child held a `shared_ptr` to its parent, and the parent held a `shared_ptr` to the child, a reference cycle would be created, leading to memory leaks. `weak_ptr` allows a node to reference its parents without affecting their lifetime.
 
@@ -30,16 +31,19 @@ A `SceneTree` encapsulates a scene graph.
 
 -   **Root Node**: A `std::shared_ptr<SceneNode>` acts as the root of the tree/sub-graph.
 -   **Fast Node Lookup**: `std::unordered_map<unsigned int, SceneNode*> m_node_lookup;`. This map provides average O(1) time complexity for finding any node in the tree by its unique ID. The map stores raw pointers for performance, assuming the `SceneTree` itself manages the lifetime of its nodes through the `m_root`'s ownership of all its children.
+-   **Name-based Lookup**: `std::unordered_map<std::string, std::vector<SceneNode*>> m_name_lookup;`.
+    -   **Global Lookup**: Provides O(1) access to all nodes with a specific name. Supports duplicate names by storing a vector of pointers.
+    -   **Scoped Lookup**: Finds nodes by name within a specific subtree. Instead of traversing the subtree (O(N)), it retrieves all nodes with the target name from the global map and checks if they are descendants of the start node (Ancestry Check).
 
 -   **Attach/Detach Algorithm**:
     -   `attach(parentNode, childTree)`:
         1.  The `childTree`'s root node is added to the `parentNode`'s list of children (`m_children`).
         2.  The `parentNode` is added to the `childTree` root's list of parents (`m_parents`).
-        3.  The `childTree`'s node lookup map is merged into the parent `SceneTree`'s lookup map to ensure all new nodes are discoverable.
+        3.  The `childTree`'s node lookup map (`m_node_lookup`) and name lookup map (`m_name_lookup`) are merged into the parent `SceneTree`'s maps. A DFS traversal is used to ensure deterministic order for duplicate names.
     -   `detach(parentNode, childNode)`:
         1.  The `childNode` is removed from the `parentNode`'s `m_children` vector.
         2.  The `parentNode` is removed from the `childNode`'s `m_parents` vector.
-        3.  The nodes from the detached subtree are removed from the main `SceneTree`'s lookup map.
+        3.  The nodes from the detached subtree are removed from the main `SceneTree`'s lookup maps (`m_node_lookup` and `m_name_lookup`).
 
 ### 3.3. `Scene`: Object Data Repository
 

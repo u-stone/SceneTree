@@ -1,4 +1,5 @@
 #include "gtest/gtest.h"
+#include <algorithm>
 #include "SceneManager.h"
 #include "Scene.h"
 #include "SceneNode.h"
@@ -157,4 +158,137 @@ TEST(SceneNodeTest, MultiParent) {
     ASSERT_EQ(sharedChild->getParents().size(), 1);
     auto onlyParent = sharedChild->getParents()[0].lock();
     EXPECT_EQ(onlyParent, nodeA);
+}
+
+TEST(SceneNodeTest, FindByName) {
+    auto root = std::make_shared<SceneNode>(1, "Root");
+    auto child1 = std::make_shared<SceneNode>(2, "Camera");
+    auto child2 = std::make_shared<SceneNode>(3, "Player");
+    auto child3 = std::make_shared<SceneNode>(4, "Enemy");
+    auto grandchild1 = std::make_shared<SceneNode>(5, "Weapon");
+    auto grandchild2 = std::make_shared<SceneNode>(6, "Armor");
+    auto grandchild3 = std::make_shared<SceneNode>(7, "Weapon");
+
+    root->addChild(child1);
+    root->addChild(child2);
+    root->addChild(child3);
+    child2->addChild(grandchild1);
+    child2->addChild(grandchild2);
+    child3->addChild(grandchild3);
+
+    // Test findFirstChildNodeByName
+    auto first_weapon = root->findFirstChildNodeByName("Weapon");
+    ASSERT_NE(first_weapon, nullptr);
+    EXPECT_EQ(first_weapon, grandchild1);
+    
+    auto player_weapon = child2->findFirstChildNodeByName("Weapon");
+    ASSERT_NE(player_weapon, nullptr);
+    EXPECT_EQ(player_weapon, grandchild1);
+
+    auto no_node = root->findFirstChildNodeByName("NonExistent");
+    EXPECT_EQ(no_node, nullptr);
+
+    // Test findAllChildNodesByName
+    auto all_weapons = root->findAllChildNodesByName("Weapon");
+    ASSERT_EQ(all_weapons.size(), 2);
+    // The order should be deterministic based on DFS traversal.
+    EXPECT_EQ(all_weapons[0], grandchild1);
+    EXPECT_EQ(all_weapons[1], grandchild3);
+
+    auto all_players = root->findAllChildNodesByName("Player");
+    ASSERT_EQ(all_players.size(), 1);
+    EXPECT_EQ(all_players[0], child2);
+
+    auto no_nodes = root->findAllChildNodesByName("NonExistent");
+    EXPECT_TRUE(no_nodes.empty());
+}
+
+TEST(SceneTreeTest, FindNodeByName) {
+    auto root = std::make_shared<SceneNode>(1, "Root");
+    auto child1 = std::make_shared<SceneNode>(2, "Target");
+    auto child2 = std::make_shared<SceneNode>(3, "Target"); // Duplicate name
+    
+    root->addChild(child1);
+    root->addChild(child2);
+    
+    auto tree = std::make_unique<SceneTree>(root);
+    
+    // Test findNodeByName (should find first occurrence or root)
+    auto foundRoot = tree->findNodeByName("Root");
+    ASSERT_NE(foundRoot, nullptr);
+    EXPECT_EQ(foundRoot, root);
+
+    auto foundTarget = tree->findNodeByName("Target");
+    ASSERT_NE(foundTarget, nullptr);
+    EXPECT_EQ(foundTarget->getName(), "Target");
+
+    // Test findAllNodesByName
+    auto allTargets = tree->findAllNodesByName("Target");
+    EXPECT_EQ(allTargets.size(), 2);
+
+    auto allRoots = tree->findAllNodesByName("Root");
+    EXPECT_EQ(allRoots.size(), 1);
+}
+
+TEST(SceneTreeTest, FindNodeByNameScoped) {
+    auto root = std::make_shared<SceneNode>(1, "Root");
+    auto branch = std::make_shared<SceneNode>(2, "Branch");
+    auto leaf = std::make_shared<SceneNode>(3, "Leaf");
+    
+    root->addChild(branch);
+    branch->addChild(leaf);
+    
+    auto tree = std::make_unique<SceneTree>(root);
+    
+    // Find branch first to get the start node
+    SceneNode* branchPtr = tree->findNode(2);
+    ASSERT_NE(branchPtr, nullptr);
+    
+    // Search for Leaf starting from Branch
+    auto foundLeaf = tree->findNodeByName(branchPtr, "Leaf");
+    ASSERT_NE(foundLeaf, nullptr);
+    EXPECT_EQ(foundLeaf->getId(), 3);
+    
+    // Search for Root starting from Branch (should fail as Root is parent, not child)
+    auto foundRoot = tree->findNodeByName(branchPtr, "Root");
+    EXPECT_EQ(foundRoot, nullptr);
+}
+
+TEST(SceneTreeTest, AttachDetachNamingCollision) {
+    // 1. Setup Tree A with a node named "CommonName"
+    auto rootA = std::make_shared<SceneNode>(1, "RootA");
+    auto nodeA = std::make_shared<SceneNode>(2, "CommonName");
+    rootA->addChild(nodeA);
+    auto treeA = std::make_unique<SceneTree>(rootA);
+
+    // 2. Setup Tree B with a node named "CommonName" (Same name, different ID/Instance)
+    auto rootB = std::make_shared<SceneNode>(10, "RootB");
+    auto nodeB = std::make_shared<SceneNode>(11, "CommonName");
+    rootB->addChild(nodeB);
+    auto treeB = std::make_unique<SceneTree>(rootB);
+
+    // 3. Attach B to A
+    treeA->attach(rootA.get(), std::move(treeB));
+
+    // 4. Verify lookup finds BOTH "CommonName" nodes
+    auto foundNodes = treeA->findAllNodesByName("CommonName");
+    EXPECT_EQ(foundNodes.size(), 2);
+    
+    // Verify we have both ID 2 and ID 11
+    bool hasId2 = std::any_of(foundNodes.begin(), foundNodes.end(), [](auto& n){ return n->getId() == 2; });
+    bool hasId11 = std::any_of(foundNodes.begin(), foundNodes.end(), [](auto& n){ return n->getId() == 11; });
+    EXPECT_TRUE(hasId2);
+    EXPECT_TRUE(hasId11);
+
+    // 5. Detach B from A (using rootB's ID 10 to find the split point)
+    auto rootBPtr = treeA->findNode(10);
+    ASSERT_NE(rootBPtr, nullptr);
+    
+    auto detachedTree = treeA->detach(rootA.get(), rootBPtr);
+
+    // 6. Verify Tree A still has its own "CommonName" node (ID 2), but ID 11 is gone
+    auto foundNodesAfter = treeA->findAllNodesByName("CommonName");
+    ASSERT_EQ(foundNodesAfter.size(), 1);
+    EXPECT_EQ(foundNodesAfter[0]->getId(), 2);
+    EXPECT_EQ(foundNodesAfter[0]->getName(), "CommonName");
 }

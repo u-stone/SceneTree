@@ -2,15 +2,6 @@
 #include <stdexcept>
 #include "SceneManager.h"
 
-void print_tree(const SceneNode& node, int depth = 0) {
-    std::string indent(depth * 4, ' ');
-    std::cout << indent << "- " << node.getName() << " (ID: " << node.getId() << ", Status: " << node.getStatus() 
-              << ", Parents: " << node.getParents().size() << ")" << std::endl;
-    for (const auto& child : node.getChildren()) {
-        print_tree(*child, depth + 1);
-    }
-}
-
 int main() {
     try {
         // 1. Setup SceneManager and Scenes
@@ -23,6 +14,7 @@ int main() {
         world_scene->addObject(20, "Environment");
         world_scene->addObject(21, "Ground");
         world_scene->addObject(22, "Sky");
+        world_scene->addObject(23, "Lamp"); // Add a duplicate name to demonstrate lookup features
 
         // Create a "Props" scene that can be attached
         auto props_scene = std::make_shared<Scene>("Props");
@@ -41,7 +33,7 @@ int main() {
         SceneTree* active_tree = manager->getActiveSceneTree();
         if (active_tree) {
             std::cout << "Active Scene Tree:" << std::endl;
-            print_tree(*active_tree->getRoot());
+            active_tree->print();
         }
 
         // 3. Attach the props scene to the environment node
@@ -50,7 +42,7 @@ int main() {
 
         if (attached && active_tree) {
             std::cout << "Attach successful. Updated Scene Tree:" << std::endl;
-            print_tree(*active_tree->getRoot());
+            active_tree->print();
 
             // 4. Find a node and update its status
             std::cout << "\n---- Finding Lamp (ID: 101) and setting status to 'broken' ----" << std::endl;
@@ -58,9 +50,27 @@ int main() {
             if (lamp_node) {
                 lamp_node->setStatus("broken");
                 std::cout << "Lamp status updated. Final Tree:" << std::endl;
-                print_tree(*active_tree->getRoot());
+                active_tree->print();
             } else {
                 std::cerr << "Could not find lamp node!" << std::endl;
+            }
+
+            // 4.1. Demonstrate Name Lookup (New Feature)
+            std::cout << "\n---- Finding all nodes named 'Lamp' (Global Lookup) ----" << std::endl;
+            auto lamps = active_tree->findAllNodesByName("Lamp");
+            std::cout << "Found " << lamps.size() << " nodes named 'Lamp':" << std::endl;
+            for (const auto& node : lamps) {
+                std::cout << "  - ID: " << node->getId() << ", Status: " << node->getStatus() << std::endl;
+            }
+
+            // 4.2. Demonstrate Scoped Lookup (New Feature)
+            std::cout << "\n---- Finding 'Lamp' scoped under 'Environment' (ID: 20) ----" << std::endl;
+            auto env_node = active_tree->findNode(20);
+            if (env_node) {
+                auto scoped_lamp = active_tree->findNodeByName(env_node, "Lamp");
+                if (scoped_lamp) {
+                    std::cout << "Found scoped Lamp: ID " << scoped_lamp->getId() << " (Expected ID 101 from Props scene)" << std::endl;
+                }
             }
 
             // 5. Demonstrate multi-parenting
@@ -71,7 +81,7 @@ int main() {
                 // This demonstrates the underlying graph structure.
                 player_node->addChild(lamp_node->shared_from_this());
                  std::cout << "Lamp is now a child of Player too. Final Tree:" << std::endl;
-                print_tree(*active_tree->getRoot());
+                active_tree->print();
 
                 // Verify parent counts
                 std::cout << "\nLamp node (ID 101) now has " << lamp_node->getParents().size() << " parents." << std::endl;

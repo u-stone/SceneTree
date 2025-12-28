@@ -18,6 +18,9 @@ public:
     bool removeChild(const std::shared_ptr<SceneNode>& child);
     const std::vector<std::shared_ptr<SceneNode>>& getChildren() const;
 
+    std::shared_ptr<SceneNode> findFirstChildNodeByName(const std::string& name) const;
+    std::vector<std::shared_ptr<SceneNode>> findAllChildNodesByName(const std::string& name) const;
+
     const std::vector<std::weak_ptr<SceneNode>>& getParents() const;
 
 private:

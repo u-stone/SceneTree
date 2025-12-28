@@ -1,6 +1,8 @@
 #include "SceneTree.h"
 #include <stdexcept>
 #include <vector>
+#include <algorithm>
+#include <iostream>
 
 SceneTree::SceneTree(std::shared_ptr<SceneNode> root) : m_root(std::move(root)) {
     if (!m_root) {
@@ -30,6 +32,7 @@ std::unique_ptr<SceneTree> SceneTree::createFromScene(const Scene& scene) {
         auto node = std::make_shared<SceneNode>(obj->id, obj->name, obj->status);
         tree->m_root->addChild(node);
         tree->m_node_lookup[node->getId()] = node.get();
+        tree->m_name_lookup[node->getName()].push_back(node.get());
     }
 
     return tree;
@@ -42,6 +45,85 @@ SceneNode* SceneTree::findNode(unsigned int id) {
         return it->second;
     }
     return nullptr;
+}
+
+std::shared_ptr<SceneNode> SceneTree::findNodeByName(const std::string& name) const {
+    auto it = m_name_lookup.find(name);
+    if (it != m_name_lookup.end() && !it->second.empty()) {
+        return it->second.front()->shared_from_this();
+    }
+    return nullptr;
+}
+
+std::vector<std::shared_ptr<SceneNode>> SceneTree::findAllNodesByName(const std::string& name) const {
+    std::vector<std::shared_ptr<SceneNode>> results;
+    auto it = m_name_lookup.find(name);
+    if (it != m_name_lookup.end()) {
+        for (auto* node : it->second) {
+            results.push_back(node->shared_from_this());
+        }
+    }
+    return results;
+}
+
+static bool isDescendant(SceneNode* node, SceneNode* ancestor) {
+    if (!node || !ancestor) return false;
+    for (const auto& weak_parent : node->getParents()) {
+        if (auto parent = weak_parent.lock()) {
+            if (parent.get() == ancestor) return true;
+            if (isDescendant(parent.get(), ancestor)) return true;
+        }
+    }
+    return false;
+}
+
+std::shared_ptr<SceneNode> SceneTree::findNodeByName(SceneNode* startNode, const std::string& name) const {
+    if (!startNode) return nullptr;
+
+    // Validate that startNode belongs to this tree
+    auto it = m_node_lookup.find(startNode->getId());
+    if (it == m_node_lookup.end() || it->second != startNode) {
+        return nullptr;
+    }
+
+    if (startNode->getName() == name) {
+        return startNode->shared_from_this();
+    }
+    
+    auto name_it = m_name_lookup.find(name);
+    if (name_it != m_name_lookup.end()) {
+        for (auto* node : name_it->second) {
+            if (isDescendant(node, startNode)) {
+                return node->shared_from_this();
+            }
+        }
+    }
+    return nullptr;
+}
+
+std::vector<std::shared_ptr<SceneNode>> SceneTree::findAllNodesByName(SceneNode* startNode, const std::string& name) const {
+    std::vector<std::shared_ptr<SceneNode>> results;
+    if (!startNode) return results;
+
+    // Validate that startNode belongs to this tree
+    auto it = m_node_lookup.find(startNode->getId());
+    if (it == m_node_lookup.end() || it->second != startNode) {
+        return results;
+    }
+
+    if (startNode->getName() == name) {
+        results.push_back(startNode->shared_from_this());
+    }
+    
+    auto name_it = m_name_lookup.find(name);
+    if (name_it != m_name_lookup.end()) {
+        for (auto* node : name_it->second) {
+            if (node != startNode && isDescendant(node, startNode)) {
+                results.push_back(node->shared_from_this());
+            }
+        }
+    }
+    return results;
 }
 
 bool SceneTree::attach(SceneNode* parentNode, std::unique_ptr<SceneTree> childTree) {
@@ -58,10 +140,8 @@ bool SceneTree::attach(SceneNode* parentNode, std::unique_ptr<SceneTree> childTr
     std::shared_ptr<SceneNode> childRoot = childTree->getRoot();
     parentNode->addChild(childRoot);
 
-    // Merge the node maps
-    for (auto const& [id, node_ptr] : childTree->m_node_lookup) {
-        m_node_lookup[id] = node_ptr;
-    }
+    // Merge the node maps using DFS traversal to ensure deterministic order
+    buildNodeMap(childRoot);
 
     // The childTree unique_ptr is now empty, its resources are merged.
     childTree->m_root = nullptr;
@@ -89,6 +169,15 @@ std::unique_ptr<SceneTree> SceneTree::detach(SceneNode* parentNode, SceneNode* c
     // Remove the detached nodes from the current tree's lookup map.
     for (auto const& [id, node_ptr] : detachedTree->m_node_lookup) {
         m_node_lookup.erase(id);
+        
+        auto it = m_name_lookup.find(node_ptr->getName());
+        if (it != m_name_lookup.end()) {
+            auto& vec = it->second;
+            vec.erase(std::remove(vec.begin(), vec.end(), node_ptr), vec.end());
+            if (vec.empty()) {
+                m_name_lookup.erase(it);
+            }
+        }
     }
     
     return detachedTree;
@@ -98,9 +187,26 @@ std::shared_ptr<SceneNode> SceneTree::getRoot() const {
     return m_root;
 }
 
+void SceneTree::print() const {
+    if (!m_root) return;
+
+    auto print_recursive = [](const SceneNode& node, int depth, auto&& self) -> void {
+        std::string indent(depth * 4, ' ');
+        std::cout << indent << "- " << node.getName() << " (ID: " << node.getId() 
+                  << ", Status: " << node.getStatus() 
+                  << ", Parents: " << node.getParents().size() << ")" << std::endl;
+        for (const auto& child : node.getChildren()) {
+            self(*child, depth + 1, self);
+        }
+    };
+
+    print_recursive(*m_root, 0, print_recursive);
+}
+
 void SceneTree::buildNodeMap(const std::shared_ptr<SceneNode>& node) {
     if (!node) return;
     m_node_lookup[node->getId()] = node.get();
+    m_name_lookup[node->getName()].push_back(node.get());
     for (const auto& child : node->getChildren()) {
         buildNodeMap(child);
     }
@@ -109,6 +215,16 @@ void SceneTree::buildNodeMap(const std::shared_ptr<SceneNode>& node) {
 void SceneTree::removeNodeMap(const std::shared_ptr<SceneNode>& node) {
     if (!node) return;
     m_node_lookup.erase(node->getId());
+    
+    auto it = m_name_lookup.find(node->getName());
+    if (it != m_name_lookup.end()) {
+        auto& vec = it->second;
+        vec.erase(std::remove(vec.begin(), vec.end(), node.get()), vec.end());
+        if (vec.empty()) {
+            m_name_lookup.erase(it);
+        }
+    }
+
     for (const auto& child : node->getChildren()) {
         removeNodeMap(child);
     }

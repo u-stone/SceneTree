@@ -61,3 +61,31 @@ void SceneNode::removeParent(const std::weak_ptr<SceneNode>& parent) {
             return !parent.owner_before(p) && !p.owner_before(parent);
         }), m_parents.end());
 }
+
+std::shared_ptr<SceneNode> SceneNode::findFirstChildNodeByName(const std::string& name) const {
+    for (const auto& child : m_children) {
+        if (child) {
+            if (child->getName() == name) {
+                return child;
+            }
+            if (auto found = child->findFirstChildNodeByName(name)) {
+                return found;
+            }
+        }
+    }
+    return nullptr;
+}
+
+std::vector<std::shared_ptr<SceneNode>> SceneNode::findAllChildNodesByName(const std::string& name) const {
+    std::vector<std::shared_ptr<SceneNode>> results;
+    for (const auto& child : m_children) {
+        if (child) {
+            if (child->getName() == name) {
+                results.push_back(child);
+            }
+            auto child_results = child->findAllChildNodesByName(name);
+            results.insert(results.end(), child_results.begin(), child_results.end());
+        }
+    }
+    return results;
+}

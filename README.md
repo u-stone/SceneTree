@@ -8,7 +8,9 @@ This project provides a flexible scene management solution for game development,
 
 - **Hierarchical Scene Structure**: `SceneTree` represents a scene graph.
 - **Multi-parenting**: A `SceneTree` can be attached to multiple parents, forming a DAG.
-- **Fast Lookups**: Objects and nodes can be found quickly using their unique IDs.
+- **Fast Lookups**:
+  - **By ID**: O(1) lookup for unique IDs.
+  - **By Name**: O(1) lookup for node names, supporting duplicate names and scoped searches within subtrees.
 - **Resource Management**: Efficiently attach/detach scenes, simulating resource loading/unloading.
 - **Scene Switching**: A `SceneManager` handles high-level scene transitions.
 - **C++17**: Implemented in modern C++.
