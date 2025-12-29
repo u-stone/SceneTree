@@ -415,3 +415,124 @@ TEST(SceneTreeTest, CreateFromSceneDeterministicRoot) {
     ASSERT_NE(tree, nullptr);
     EXPECT_EQ(tree->getRoot()->getId(), 3); // Should be the first one added
 }
+
+TEST(SceneTreeTest, PropertyListeners) {
+    auto root = std::make_shared<SceneNode>(1, "Root");
+    auto child = std::make_shared<SceneNode>(2, "Child");
+    root->addChild(child);
+    auto tree = std::make_unique<SceneTree>(root);
+
+    // 1. Test Global Listener (Status Change)
+    bool globalStatusCalled = false;
+    tree->addPropertyListener(NodeProperty::Status, 
+        [&](SceneNode* node, NodeProperty prop, const std::any& oldVal, const std::any& newVal) {
+            globalStatusCalled = true;
+            EXPECT_EQ(node->getId(), 2);
+            EXPECT_EQ(prop, NodeProperty::Status);
+            EXPECT_EQ(std::any_cast<ObjectStatus>(oldVal), ObjectStatus::Active);
+            EXPECT_EQ(std::any_cast<ObjectStatus>(newVal), ObjectStatus::Broken);
+        });
+
+    child->setStatus(ObjectStatus::Broken);
+    EXPECT_TRUE(globalStatusCalled);
+
+    // 2. Test Node Specific Listener (Name Change)
+    bool nodeNameCalled = false;
+    tree->addNodePropertyListener(2, NodeProperty::Name, 
+        [&](SceneNode* node, NodeProperty prop, const std::any& oldVal, const std::any& newVal) {
+            nodeNameCalled = true;
+            EXPECT_EQ(node->getId(), 2);
+            EXPECT_EQ(std::any_cast<std::string>(oldVal), "Child");
+            EXPECT_EQ(std::any_cast<std::string>(newVal), "NewName");
+        });
+
+    child->setName("NewName");
+    EXPECT_TRUE(nodeNameCalled);
+
+    // 3. Test Tag Listener (TagAdded)
+    bool tagAddedCalled = false;
+    tree->addPropertyListener(NodeProperty::TagAdded,
+        [&](SceneNode* node, NodeProperty prop, const std::any& oldVal, const std::any& newVal) {
+            tagAddedCalled = true;
+            EXPECT_EQ(std::any_cast<std::string>(newVal), "Enemy");
+        });
+    
+    child->addTag("Enemy");
+    EXPECT_TRUE(tagAddedCalled);
+}
+
+TEST(SceneTreeTest, TagLookupDynamic) {
+    auto root = std::make_shared<SceneNode>(1, "Root");
+    auto child = std::make_shared<SceneNode>(2, "Child");
+    root->addChild(child);
+    
+    auto tree = std::make_unique<SceneTree>(root);
+
+    // 1. Add Tag
+    child->addTag("Enemy");
+    auto found = tree->findFirstNodeByTag("Enemy");
+    ASSERT_NE(found, nullptr);
+    EXPECT_EQ(found->getId(), 2);
+
+    // 2. Add another tag
+    child->addTag("Destructible");
+    auto nodes = tree->findAllNodesByTag("Destructible");
+    EXPECT_EQ(nodes.size(), 1);
+
+    // 3. Remove Tag
+    child->removeTag("Enemy");
+    EXPECT_EQ(tree->findFirstNodeByTag("Enemy"), nullptr);
+}
+
+TEST(SceneTreeTest, BatchingNameUpdates) {
+    auto root = std::make_shared<SceneNode>(1, "Root");
+    auto tree = std::make_unique<SceneTree>(root);
+
+    tree->setBatchingEnabled(true);
+
+    // Update name. SceneNode updates immediately, but SceneTree index should lag.
+    root->setName("NewName");
+
+    // Verify SceneNode state
+    EXPECT_EQ(root->getName(), "NewName");
+    EXPECT_TRUE(root->isPropertyDirty(NodeProperty::Name));
+
+    // Verify SceneTree Index (still points to old name key)
+    auto foundByOldName = tree->findNodeByName("Root");
+    ASSERT_NE(foundByOldName, nullptr);
+    EXPECT_EQ(foundByOldName->getId(), 1);
+
+    // Verify SceneTree Index (new name key not yet present)
+    auto foundByNewName = tree->findNodeByName("NewName");
+    EXPECT_EQ(foundByNewName, nullptr);
+
+    // Process Events
+    tree->processEvents();
+
+    // Verify Dirty Flag Cleared
+    EXPECT_FALSE(root->isPropertyDirty(NodeProperty::Name));
+
+    // Verify Indices Updated
+    EXPECT_EQ(tree->findNodeByName("Root"), nullptr);
+    EXPECT_NE(tree->findNodeByName("NewName"), nullptr);
+}
+
+TEST(SceneTreeTest, BatchingMultipleUpdates) {
+    auto root = std::make_shared<SceneNode>(1, "Root");
+    auto tree = std::make_unique<SceneTree>(root);
+    tree->setBatchingEnabled(true);
+
+    // Update name multiple times
+    root->setName("Name1");
+    root->setName("Name2");
+    root->setName("FinalName");
+
+    // Only the transition from Clean -> Dirty triggers an event to SceneTree.
+    // SceneTree processes the node once.
+    
+    tree->processEvents();
+
+    EXPECT_NE(tree->findNodeByName("FinalName"), nullptr);
+    EXPECT_EQ(tree->findNodeByName("Root"), nullptr);
+    EXPECT_EQ(tree->findNodeByName("Name1"), nullptr);
+}

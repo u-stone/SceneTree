@@ -82,6 +82,14 @@ int main() {
                 std::cout << "Found Ground node: ID " << ground_node->getId() << " (Status: " << ground_node->getStatus() << ")" << std::endl;
             }
 
+            // 4.5. Demonstrate Tag Lookup (New Feature)
+            std::cout << "\n---- Finding all nodes with tag 'Interactable' ----" << std::endl;
+            auto interactables = active_tree->findAllNodesByTag("Interactable");
+            std::cout << "Found " << interactables.size() << " interactable nodes." << std::endl;
+            for (const auto& node : interactables) {
+                std::cout << "  - Node: " << node->getName() << " (ID: " << node->getId() << ")" << std::endl;
+            }
+
             // 4.4. Demonstrate Hierarchical Lookup after Detach
             std::cout << "\n---- Detaching PropsRoot (ID: 100) and searching for 'Lamp' again ----" << std::endl;
             auto props_root = active_tree->findNode(100);
@@ -144,7 +152,20 @@ int main() {
                 active_tree->print();
             }
 
-            // 7. Demonstrate SceneIO (Save and Load)
+            // 7. Demonstrate Property Listeners
+            std::cout << "\n---- Demonstrating Property Listeners ----" << std::endl;
+            
+            // Register a listener for status changes
+            active_tree->addPropertyListener(NodeProperty::Status, [](SceneNode* node, NodeProperty prop, const std::any& oldVal, const std::any& newVal) {
+                std::cout << "[Listener] Node '" << node->getName() << "' (ID: " << node->getId() << ") changed status." << std::endl;
+            });
+
+            if (player_node) {
+                std::cout << "Changing Player status to Inactive..." << std::endl;
+                player_node->setStatus(ObjectStatus::Inactive);
+            }
+
+            // 8. Demonstrate SceneIO (Save and Load)
             std::cout << "\n---- Demonstrating SceneIO: Saving and Loading ----" << std::endl;
             
             std::filesystem::path dataDir("data");

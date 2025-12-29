@@ -21,6 +21,7 @@ The system is composed of five main classes:
 A `SceneNode` is the fundamental building block of the scene graph.
 
 -   **ID, Name, Status**: Basic properties for identification and state management. The `id` is the key that links a `SceneNode` to a `SceneObject`.
+-   **Tags**: A collection of strings (`std::unordered_set<std::string>`) used for categorizing nodes for fast retrieval by systems (e.g., AI, Physics, Scripts).
 -   **Parent-Child Relationships**: To implement a DAG, a node must be ableto have multiple parents.
 -   **Parent-Child Relationships**: To implement a DAG, a node must be able to have multiple parents.
     -   `m_children`: `std::vector<std::shared_ptr<SceneNode>>`. Children are owned by their parents. `std::shared_ptr` is used because a child node's lifetime is tied to all its parents. It will only be destroyed when the last parent referencing it is destroyed.
@@ -36,6 +37,9 @@ A `SceneTree` encapsulates a scene graph.
     -   **Global Lookup**: Provides O(1) access to all nodes with a specific name. Supports duplicate names by storing a vector of pointers.
     -   **Scoped Lookup**: Finds nodes by name within a specific subtree. Instead of traversing the subtree (O(N)), it retrieves all nodes with the target name from the global map and checks if they are descendants of the start node (Ancestry Check).
     -   **Hierarchical Lookup**: Delegates to `SceneNode`'s recursive search for DFS-based lookups (`findFirstChildNodeByName`).
+    -   **Tag-based Lookup**: `std::unordered_map<std::string, std::vector<SceneNode*>> m_tag_lookup;`.
+        -   Provides O(1) access to groups of nodes categorized by functional tags (e.g., "Enemy", "Interactable", "Checkpoint").
+        -   Essential for script systems to efficiently query sets of objects without traversing the hierarchy or relying on unique names.
 
 -   **Attach/Detach Algorithm**:
     -   `attach(parentNode, childTree)`:

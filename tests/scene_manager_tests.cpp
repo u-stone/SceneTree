@@ -67,3 +67,12 @@ TEST_F(SceneManagerTest, AttachScene) {
     auto parent = subSceneRoot->getParents()[0].lock();
     EXPECT_EQ(parent.get(), playerNode);
 }
+
+TEST_F(SceneManagerTest, TagLookupInterface) {
+    manager->switchToScene("MainScene");
+    SceneTree* activeTree = manager->getActiveSceneTree();
+    ASSERT_NE(activeTree, nullptr);
+
+    auto nodes = activeTree->findAllNodesByTag("NonExistentTag");
+    EXPECT_TRUE(nodes.empty());
+}

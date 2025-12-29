@@ -6,7 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 # --- Address Sanitizer (ASan) Support ---
-option(USE_ASAN "Enable Address Sanitizer for memory safety debugging" ON)
+option(USE_ASAN "Enable Address Sanitizer for memory safety debugging" OFF)
 if(USE_ASAN)
     message(STATUS "Address Sanitizer (ASan) enabled")
     if(MSVC)
@@ -35,8 +35,7 @@ set(FETCHCONTENT_BASE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/external)
 
 FetchContent_Declare(
   googletest
-  URL https://github.com/google/googletest/archive/refs/tags/v1.14.0.zip
-  DOWNLOAD_EXTRACT_TIMESTAMP true
+  URL "https://github.com/google/googletest/archive/refs/tags/v1.14.0.zip"
 )
 
 # For Windows: Prevent overriding the parent project's compiler/linker settings
@@ -46,8 +45,7 @@ FetchContent_MakeAvailable(googletest)
 # --- RapidJSON ---
 FetchContent_Declare(
   rapidjson
-  URL https://github.com/Tencent/rapidjson/archive/refs/tags/v1.1.0.zip
-  DOWNLOAD_EXTRACT_TIMESTAMP true
+  URL "https://github.com/Tencent/rapidjson/archive/refs/tags/v1.1.0.zip"
 )
 set(RAPIDJSON_BUILD_DOC OFF CACHE BOOL "" FORCE)
 set(RAPIDJSON_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)

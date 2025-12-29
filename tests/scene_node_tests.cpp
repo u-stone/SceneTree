@@ -101,3 +101,67 @@ TEST(SceneNodeTest, FindByName) {
     auto no_nodes = root->findAllChildNodesByName("NonExistent");
     EXPECT_TRUE(no_nodes.empty());
 }
+
+TEST(SceneNodeTest, TagManagement) {
+    auto node = std::make_shared<SceneNode>(1, "Node");
+
+    node->addTag("Tag1");
+    EXPECT_TRUE(node->hasTag("Tag1"));
+    
+    node->addTag("Tag2");
+    EXPECT_EQ(node->getTags().size(), 2);
+
+    node->removeTag("Tag1");
+    EXPECT_FALSE(node->hasTag("Tag1"));
+    EXPECT_TRUE(node->hasTag("Tag2"));
+}
+
+TEST(SceneNodeTest, DirtyFlagSystem) {
+    auto node = std::make_shared<SceneNode>(1, "Node");
+
+    // Initially clean
+    EXPECT_FALSE(node->isPropertyDirty(NodeProperty::Name));
+
+    // Change name
+    node->setName("Changed");
+    
+    // Should be dirty now
+    EXPECT_TRUE(node->isPropertyDirty(NodeProperty::Name));
+    EXPECT_EQ(node->getCleanName(), "Node"); // Original name preserved
+    EXPECT_EQ(node->getName(), "Changed");
+
+    // Clear dirty
+    node->clearDirty();
+    EXPECT_FALSE(node->isPropertyDirty(NodeProperty::Name));
+    
+    // Change again
+    node->setName("ChangedAgain");
+    EXPECT_EQ(node->getCleanName(), "Changed"); // Previous committed name
+}
+
+TEST(SceneNodeTest, DirtyFlagBitwiseOperations) {
+    auto node = std::make_shared<SceneNode>(1, "Node");
+
+    // Initially clean
+    EXPECT_FALSE(node->arePropertiesDirty(NodeProperty::Name | NodeProperty::Status));
+
+    // Change name -> Dirty Name
+    node->setName("NewName");
+    EXPECT_TRUE(node->isPropertyDirty(NodeProperty::Name));
+    EXPECT_FALSE(node->isPropertyDirty(NodeProperty::Status));
+    
+    // Check combined mask: (Name | Status) & DirtyFlags(Name) -> Non-zero
+    EXPECT_TRUE(node->arePropertiesDirty(NodeProperty::Name | NodeProperty::Status));
+    
+    // Change status -> Dirty Status
+    node->setStatus(ObjectStatus::Inactive);
+    EXPECT_TRUE(node->isPropertyDirty(NodeProperty::Status));
+    
+    // Test bitwise operators helper
+    NodeProperty mask = NodeProperty::Name;
+    mask |= NodeProperty::Status;
+    EXPECT_EQ(mask, NodeProperty::Name | NodeProperty::Status);
+    
+    mask &= NodeProperty::Name;
+    EXPECT_EQ(mask, NodeProperty::Name);
+}

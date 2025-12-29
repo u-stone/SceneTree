@@ -25,12 +25,97 @@ const std::string& SceneNode::getName() const {
     return m_name;
 }
 
+void SceneNode::setName(const std::string& name) {
+    if (m_name == name) return;
+    if (!isPropertyDirty(NodeProperty::Name)) {
+        m_clean_name = m_name;
+        m_name = name;
+        markDirty(NodeProperty::Name);
+    } else {
+        m_name = name;
+    }
+}
+
 ObjectStatus SceneNode::getStatus() const {
     return m_status;
 }
 
 void SceneNode::setStatus(ObjectStatus status) {
-    m_status = status;
+    if (m_status == status) return;
+    if (!isPropertyDirty(NodeProperty::Status)) {
+        m_clean_status = m_status;
+        m_status = status;
+        markDirty(NodeProperty::Status);
+    } else {
+        m_status = status;
+    }
+}
+
+void SceneNode::markDirty(NodeProperty prop) {
+    bool was_clean = (m_dirty_flags == 0);
+    m_dirty_flags |= static_cast<uint32_t>(prop);
+    
+    // Only notify observers when transitioning from Clean to Dirty.
+    // Subsequent updates are coalesced until clearDirty() is called.
+    if (was_clean) {
+        for (auto* observer : m_observers) {
+            observer->onNodePropertyChanged(this, NodeProperty::IsDirty, std::any(), std::any());
+        }
+    }
+}
+
+bool SceneNode::isPropertyDirty(NodeProperty prop) const {
+    return (m_dirty_flags & static_cast<uint32_t>(prop)) != 0;
+}
+
+bool SceneNode::arePropertiesDirty(NodeProperty mask) const {
+    return (m_dirty_flags & static_cast<uint32_t>(mask)) != 0;
+}
+
+void SceneNode::clearDirty() {
+    m_dirty_flags = 0;
+}
+
+const std::string& SceneNode::getCleanName() const {
+    return m_clean_name;
+}
+
+ObjectStatus SceneNode::getCleanStatus() const {
+    return m_clean_status;
+}
+
+void SceneNode::addTag(const std::string& tag) {
+    if (m_tags.insert(tag).second) {
+        for (auto* observer : m_observers) {
+            observer->onNodePropertyChanged(this, NodeProperty::TagAdded, std::any(), tag);
+        }
+    }
+}
+
+void SceneNode::removeTag(const std::string& tag) {
+    if (m_tags.erase(tag) > 0) {
+        for (auto* observer : m_observers) {
+            observer->onNodePropertyChanged(this, NodeProperty::TagRemoved, tag, std::any());
+        }
+    }
+}
+
+bool SceneNode::hasTag(const std::string& tag) const {
+    return m_tags.find(tag) != m_tags.end();
+}
+
+const std::unordered_set<std::string>& SceneNode::getTags() const {
+    return m_tags;
+}
+
+void SceneNode::registerObserver(INodeObserver* observer) {
+    if (observer && std::find(m_observers.begin(), m_observers.end(), observer) == m_observers.end()) {
+        m_observers.push_back(observer);
+    }
+}
+
+void SceneNode::unregisterObserver(INodeObserver* observer) {
+    m_observers.erase(std::remove(m_observers.begin(), m_observers.end(), observer), m_observers.end());
 }
 
 void SceneNode::addChild(std::shared_ptr<SceneNode> child) {

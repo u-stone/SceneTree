@@ -30,6 +30,17 @@ static void serializeNode(PrettyWriter<OStreamWrapper>& writer, const std::share
     writer.Key("status");
     writer.String(statusToString(node->getStatus()).c_str());
 
+    // --- Tags ---
+    const auto& tags = node->getTags();
+    if (!tags.empty()) {
+        writer.Key("tags");
+        writer.StartArray();
+        for (const auto& tag : tags) {
+            writer.String(tag.c_str());
+        }
+        writer.EndArray();
+    }
+
     // --- Future Extensions ---
     // You can add more properties here, e.g.:
     // writer.Key("transform"); writer.StartObject(); ... writer.EndObject();
@@ -94,6 +105,16 @@ static std::shared_ptr<SceneNode> deserializeNode(const Value& val) {
 
     // Create the node
     auto node = std::make_shared<SceneNode>(id, name, status);
+
+    // --- Tags ---
+    if (val.HasMember("tags") && val["tags"].IsArray()) {
+        const Value& tags = val["tags"];
+        for (SizeType i = 0; i < tags.Size(); i++) {
+            if (tags[i].IsString()) {
+                node->addTag(tags[i].GetString());
+            }
+        }
+    }
 
     // --- Future Extensions ---
     // Parse additional properties here
