@@ -2,6 +2,8 @@
 #include <stdexcept>
 #include <filesystem>
 #include <fstream>
+#include <thread>
+#include <chrono>
 #include "SceneManager.h"
 #include "SceneIO.h"
 
@@ -234,6 +236,48 @@ int main() {
             auto future_tree = SceneIO::loadSceneTree(future_file);
             if (future_tree) {
                 std::cout << "Loaded future tree successfully (despite warning). Root ID: " << future_tree->getRoot()->getId() << std::endl;
+            }
+
+            // 11. Demonstrate Async Loading and Unloading
+            std::cout << "\n---- Demonstrating Async Loading and Unloading ----" << std::endl;
+            
+            std::string async_file = (dataDir / "async_scene.json").string();
+            {
+                std::ofstream ofs(async_file);
+                ofs << "{\"format_version\": 1, \"root\": {\"id\": 1000, \"name\": \"AsyncNode\", \"status\": \"Active\"}}";
+            }
+
+            bool async_done = false;
+            std::cout << "Starting async preload of 'AsyncLevel'..." << std::endl;
+            manager->preloadSceneAsync("AsyncLevel", async_file, [&](const std::string& name, bool success) {
+                std::cout << "[Callback] Preload finished for: " << name << " (Success: " << (success ? "Yes" : "No") << ")" << std::endl;
+                async_done = true;
+            });
+
+            // Simulate main loop waiting for async tasks
+            int loop_count = 0;
+            while (!manager->isSceneReady("AsyncLevel") && loop_count < 100) {
+                manager->update(); // Must call update to process finished tasks
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                if (loop_count % 10 == 0) std::cout << "  Waiting for background loading..." << std::endl;
+                loop_count++;
+            }
+
+            if (manager->isSceneReady("AsyncLevel")) {
+                std::cout << "AsyncLevel is ready. Switching now..." << std::endl;
+                manager->switchToScene("AsyncLevel");
+                std::cout << "Active scene is now: " << manager->getActiveSceneTree()->getRoot()->getName() << std::endl;
+                
+                std::cout << "Unloading AsyncLevel asynchronously..." << std::endl;
+                manager->unloadSceneAsync("AsyncLevel", [](const std::string& name, bool success) {
+                    std::cout << "[Callback] Unload finished for: " << name << std::endl;
+                });
+                
+                // Process callbacks for unloading tasks
+                for(int i=0; i<5; ++i) {
+                    manager->update();
+                    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                }
             }
 
         } else {
