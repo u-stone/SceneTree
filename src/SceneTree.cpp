@@ -105,12 +105,28 @@ std::vector<std::shared_ptr<SceneNode>> SceneTree::findAllNodesByTag(const std::
 
 static bool isDescendant(SceneNode* node, SceneNode* ancestor) {
     if (!node || !ancestor) return false;
-    for (const auto& weak_parent : node->getParents()) {
-        if (auto parent = weak_parent.lock()) {
-            if (parent.get() == ancestor) return true;
-            if (isDescendant(parent.get(), ancestor)) return true;
+
+    // Use iterative BFS to avoid recursion depth limits and handle DAGs efficiently
+    std::vector<SceneNode*> queue;
+    std::unordered_set<SceneNode*> visited;
+
+    queue.push_back(node);
+    visited.insert(node);
+
+    size_t head = 0;
+    while (head < queue.size()) {
+        SceneNode* current = queue[head++];
+        
+        for (const auto& weak_parent : current->getParents()) {
+            if (auto parent = weak_parent.lock()) {
+                if (parent.get() == ancestor) return true;
+                if (visited.insert(parent.get()).second) {
+                    queue.push_back(parent.get());
+                }
+            }
         }
     }
+    
     return false;
 }
 

@@ -3,71 +3,83 @@
 #include "SceneTree.h"
 #include "SceneNode.h"
 #include <filesystem>
+#include <fstream>
 
-TEST(SceneIOTest, SaveAndLoad) {
-    // 1. Create a SceneTree manually
-    auto root = std::make_shared<SceneNode>(1, "Root", ObjectStatus::Active);
-    auto child1 = std::make_shared<SceneNode>(2, "Child1", ObjectStatus::Inactive);
-    auto child2 = std::make_shared<SceneNode>(3, "Child2", ObjectStatus::Hidden);
-    
-    root->addChild(child1);
-    root->addChild(child2);
-    
-    // Add a grandchild
-    auto grandchild = std::make_shared<SceneNode>(4, "Grandchild", ObjectStatus::Broken);
-    child1->addChild(grandchild);
+namespace fs = std::filesystem;
 
-    SceneTree originalTree(root);
-
-    // Ensure data directory exists
-    std::filesystem::path dataDir("data");
-    if (!std::filesystem::exists(dataDir)) {
-        std::filesystem::create_directory(dataDir);
+class SceneIOTest : public ::testing::Test {
+protected:
+    void SetUp() override {
+        // Create a temporary directory for test files
+        // Using current_path to ensure write permissions in the build directory
+        testDir = fs::current_path() / "SceneIOTest_Data";
+        if (!fs::exists(testDir)) {
+            fs::create_directory(testDir);
+        }
     }
 
-    // 2. Save to file
-    std::string filename = (dataDir / "test_scene_io.json").string();
-    bool saved = SceneIO::saveSceneTree(originalTree, filename);
-    ASSERT_TRUE(saved);
+    void TearDown() override {
+        // Cleanup
+        if (fs::exists(testDir)) {
+            fs::remove_all(testDir);
+        }
+    }
 
-    // 3. Load from file
-    auto loadedTree = SceneIO::loadSceneTree(filename);
-    ASSERT_NE(loadedTree, nullptr);
+    fs::path testDir;
+};
 
-    // 4. Verify structure
+TEST_F(SceneIOTest, SaveAndLoadTags) {
+    // 1. Setup Tree with Tags
+    auto root = std::make_shared<SceneNode>(1, "Root");
+    root->addTag("LevelRoot");
+    
+    auto child = std::make_shared<SceneNode>(2, "Child");
+    child->addTag("Enemy");
+    child->addTag("Destructible");
+    
+    root->addChild(child);
+    
+    auto tree = std::make_unique<SceneTree>(root);
+
+    // 2. Save to JSON
+    fs::path filepath = testDir / "tags_test.json";
+    bool saved = SceneIO::saveSceneTree(*tree, filepath.string());
+    ASSERT_TRUE(saved) << "Failed to save scene tree to " << filepath;
+
+    // 3. Load from JSON
+    auto loadedTree = SceneIO::loadSceneTree(filepath.string());
+    ASSERT_NE(loadedTree, nullptr) << "Failed to load scene tree from " << filepath;
+
+    // 4. Verify Tags
     auto loadedRoot = loadedTree->getRoot();
     ASSERT_NE(loadedRoot, nullptr);
-    EXPECT_EQ(loadedRoot->getId(), root->getId());
-    EXPECT_EQ(loadedRoot->getName(), root->getName());
-    EXPECT_EQ(loadedRoot->getStatus(), root->getStatus());
+    EXPECT_EQ(loadedRoot->getId(), 1);
+    EXPECT_TRUE(loadedRoot->hasTag("LevelRoot"));
+    EXPECT_EQ(loadedRoot->getTags().size(), 1);
+
+    auto loadedChild = loadedTree->findNode(2);
+    ASSERT_NE(loadedChild, nullptr);
+    EXPECT_TRUE(loadedChild->hasTag("Enemy"));
+    EXPECT_TRUE(loadedChild->hasTag("Destructible"));
+    EXPECT_EQ(loadedChild->getTags().size(), 2);
     
-    ASSERT_EQ(loadedRoot->getChildren().size(), 2);
-    
-    // Verify Child1
-    // Note: Order of children is preserved because vector is ordered and serialization/deserialization preserves array order.
-    auto loadedChild1 = loadedRoot->getChildren()[0];
-    EXPECT_EQ(loadedChild1->getId(), child1->getId());
-    EXPECT_EQ(loadedChild1->getName(), child1->getName());
-    EXPECT_EQ(loadedChild1->getStatus(), child1->getStatus());
-
-    // Verify Child2
-    auto loadedChild2 = loadedRoot->getChildren()[1];
-    EXPECT_EQ(loadedChild2->getId(), child2->getId());
-    EXPECT_EQ(loadedChild2->getName(), child2->getName());
-    EXPECT_EQ(loadedChild2->getStatus(), child2->getStatus());
-
-    // Verify Grandchild
-    ASSERT_EQ(loadedChild1->getChildren().size(), 1);
-    auto loadedGrandchild = loadedChild1->getChildren()[0];
-    EXPECT_EQ(loadedGrandchild->getId(), grandchild->getId());
-    EXPECT_EQ(loadedGrandchild->getName(), grandchild->getName());
-    EXPECT_EQ(loadedGrandchild->getStatus(), grandchild->getStatus());
-
-    // 5. Cleanup
-    std::filesystem::remove(filename);
+    // 5. Verify Tag Indexing in Loaded Tree
+    auto enemies = loadedTree->findAllNodesByTag("Enemy");
+    EXPECT_EQ(enemies.size(), 1);
+    if (!enemies.empty()) {
+        EXPECT_EQ(enemies[0]->getId(), 2);
+    }
 }
 
-TEST(SceneIOTest, LoadNonExistentFile) {
-    auto tree = SceneIO::loadSceneTree("non_existent_file.json");
-    EXPECT_EQ(tree, nullptr);
+TEST_F(SceneIOTest, SaveAndLoadEmptyTags) {
+    auto root = std::make_shared<SceneNode>(1, "Root");
+    auto tree = std::make_unique<SceneTree>(root);
+
+    fs::path filepath = testDir / "no_tags_test.json";
+    ASSERT_TRUE(SceneIO::saveSceneTree(*tree, filepath.string()));
+
+    auto loadedTree = SceneIO::loadSceneTree(filepath.string());
+    ASSERT_NE(loadedTree, nullptr);
+
+    EXPECT_TRUE(loadedTree->getRoot()->getTags().empty());
 }

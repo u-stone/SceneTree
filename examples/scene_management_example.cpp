@@ -188,6 +188,38 @@ int main() {
                 std::cerr << "Failed to save scene tree." << std::endl;
             }
 
+            // 9. Demonstrate Batching and Update Loop
+            std::cout << "\n---- Demonstrating Batching and Update Loop ----" << std::endl;
+            
+            // Enable batching
+            active_tree->setBatchingEnabled(true);
+            std::cout << "Batching enabled." << std::endl;
+
+            SceneNode* player_ptr_batch = active_tree->findNode(10);
+            if (player_ptr_batch) {
+                std::cout << "Renaming Player (ID: 10) to 'Player_Renamed'..." << std::endl;
+                player_ptr_batch->setName("Player_Renamed");
+
+                // Check dirty flag
+                if (player_ptr_batch->isPropertyDirty(NodeProperty::Name)) {
+                    std::cout << "Node is marked dirty (Name property)." << std::endl;
+                }
+
+                // Verify immediate lookup fails (because index isn't updated yet)
+                if (!active_tree->findNodeByName("Player_Renamed")) {
+                    std::cout << "Immediate lookup for 'Player_Renamed' failed (Expected behavior: Index stale)." << std::endl;
+                }
+
+                // Simulate Game Loop Update
+                std::cout << "Simulating Game Loop Update (calling active_tree->update)..." << std::endl;
+                active_tree->update(0.016); // Delta time
+
+                // Verify lookup succeeds after update
+                if (active_tree->findNodeByName("Player_Renamed")) {
+                    std::cout << "Lookup for 'Player_Renamed' succeeded after update." << std::endl;
+                }
+            }
+
         } else {
             std::cerr << "Attach failed!" << std::endl;
         }
