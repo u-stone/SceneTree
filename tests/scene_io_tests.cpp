@@ -83,3 +83,48 @@ TEST_F(SceneIOTest, SaveAndLoadEmptyTags) {
 
     EXPECT_TRUE(loadedTree->getRoot()->getTags().empty());
 }
+
+TEST_F(SceneIOTest, LoadLegacyFormat) {
+    // Manually create a legacy JSON file (no format_version wrapper, root object at top level)
+    fs::path filepath = testDir / "legacy_test.json";
+    std::ofstream ofs(filepath);
+    ofs << R"({
+        "id": 1,
+        "name": "LegacyRoot",
+        "status": "Active",
+        "children": []
+    })";
+    ofs.close();
+
+    auto tree = SceneIO::loadSceneTree(filepath.string());
+    ASSERT_NE(tree, nullptr) << "Failed to load legacy format JSON";
+    EXPECT_EQ(tree->getRoot()->getId(), 1);
+    EXPECT_EQ(tree->getRoot()->getName(), "LegacyRoot");
+}
+
+TEST_F(SceneIOTest, LoadFutureVersion) {
+    // Manually create a future version JSON file
+    fs::path filepath = testDir / "future_version_test.json";
+    std::ofstream ofs(filepath);
+    ofs << R"({
+        "format_version": 999,
+        "root": {
+            "id": 100,
+            "name": "FutureRoot",
+            "status": "Active"
+        }
+    })";
+    ofs.close();
+
+    // Capture stderr to verify the warning message
+    testing::internal::CaptureStderr();
+    auto tree = SceneIO::loadSceneTree(filepath.string());
+    std::string output = testing::internal::GetCapturedStderr();
+    
+    // Verify that it loaded despite the version mismatch (forward compatibility attempt)
+    ASSERT_NE(tree, nullptr);
+    EXPECT_EQ(tree->getRoot()->getId(), 100);
+    
+    // Verify the warning was printed
+    EXPECT_NE(output.find("Warning: File version (999) is newer"), std::string::npos);
+}

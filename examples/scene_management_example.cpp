@@ -1,6 +1,7 @@
 #include <iostream>
 #include <stdexcept>
 #include <filesystem>
+#include <fstream>
 #include "SceneManager.h"
 #include "SceneIO.h"
 
@@ -218,6 +219,21 @@ int main() {
                 if (active_tree->findNodeByName("Player_Renamed")) {
                     std::cout << "Lookup for 'Player_Renamed' succeeded after update." << std::endl;
                 }
+            }
+
+            // 10. Demonstrate Versioning Warning
+            std::cout << "\n---- Demonstrating Versioning Warning ----" << std::endl;
+            std::string future_file = (dataDir / "future_version.json").string();
+            {
+                std::ofstream ofs(future_file);
+                // Create a fake file with version 999
+                ofs << "{\"format_version\": 999, \"root\": {\"id\": 500, \"name\": \"FutureNode\", \"status\": \"Active\"}}";
+            }
+
+            std::cout << "Loading a file with version 999 (Current is 1)..." << std::endl;
+            auto future_tree = SceneIO::loadSceneTree(future_file);
+            if (future_tree) {
+                std::cout << "Loaded future tree successfully (despite warning). Root ID: " << future_tree->getRoot()->getId() << std::endl;
             }
 
         } else {

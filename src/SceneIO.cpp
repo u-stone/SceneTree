@@ -14,6 +14,8 @@
 
 using namespace rapidjson;
 
+static const int CURRENT_FORMAT_VERSION = 1;
+
 // Helper function to serialize a single node recursively
 static void serializeNode(PrettyWriter<OStreamWrapper>& writer, const std::shared_ptr<SceneNode>& node) {
     if (!node) return;
@@ -75,15 +77,21 @@ bool SceneIO::saveSceneTree(const SceneTree& tree, const std::string& filepath) 
     OStreamWrapper osw(ofs);
     PrettyWriter<OStreamWrapper> writer(osw);
 
-    // Wrap the entire tree in a "scene" object or just save the root object directly.
-    // Here we save the root object directly as the JSON root.
+    // Wrap the output in a versioned object
+    writer.StartObject();
+
+    writer.Key("format_version");
+    writer.Int(CURRENT_FORMAT_VERSION);
+
+    writer.Key("root");
     serializeNode(writer, root);
+    writer.EndObject();
 
     return true;
 }
 
 // Helper function to deserialize a single node recursively
-static std::shared_ptr<SceneNode> deserializeNode(const Value& val) {
+static std::shared_ptr<SceneNode> deserializeNode(const Value& val, int version) {
     if (!val.IsObject()) return nullptr;
 
     // --- Core Properties ---
@@ -123,7 +131,7 @@ static std::shared_ptr<SceneNode> deserializeNode(const Value& val) {
     if (val.HasMember("children") && val["children"].IsArray()) {
         const Value& children = val["children"];
         for (SizeType i = 0; i < children.Size(); i++) {
-            auto childNode = deserializeNode(children[i]);
+            auto childNode = deserializeNode(children[i], version);
             if (childNode) {
                 node->addChild(childNode);
             }
@@ -149,7 +157,29 @@ std::unique_ptr<SceneTree> SceneIO::loadSceneTree(const std::string& filepath) {
         return nullptr;
     }
 
-    auto rootNode = deserializeNode(doc);
+    if (!doc.IsObject()) {
+        return nullptr;
+    }
+
+    std::shared_ptr<SceneNode> rootNode = nullptr;
+    int version = 0;
+
+    // Check for versioning
+    if (doc.HasMember("format_version") && doc["format_version"].IsInt()) {
+        version = doc["format_version"].GetInt();
+        
+        if (version > CURRENT_FORMAT_VERSION) {
+            std::cerr << "[SceneIO] Warning: File version (" << version << ") is newer than supported version (" << CURRENT_FORMAT_VERSION << ")." << std::endl;
+        }
+
+        if (doc.HasMember("root")) {
+            rootNode = deserializeNode(doc["root"], version);
+        }
+    } else {
+        // Legacy format: The document root is the SceneNode
+        rootNode = deserializeNode(doc, 0);
+    }
+
     if (!rootNode) {
         return nullptr;
     }
