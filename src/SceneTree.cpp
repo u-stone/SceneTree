@@ -3,18 +3,41 @@
 #include <vector>
 #include <algorithm>
 #include <iostream>
-#include <unordered_set>
+
+class SceneNodePropertyObserver : public INodeObserver {
+public:
+    explicit SceneNodePropertyObserver(SceneTree* tree) : m_tree(tree) {}
+
+    void onNodePropertyChanged(SceneNode* node, NodeProperty prop, const std::any& oldVal, const std::any& newVal) override {
+        if (prop == NodeProperty::IsDirty) {
+            m_tree->m_dirty_nodes.push_back(node->weak_from_this());
+            if (!m_tree->m_batching_enabled) {
+                m_tree->processEvents();
+            }
+            return;
+        }
+
+        if (m_tree->m_batching_enabled) {
+            m_tree->m_event_queue.push_back({node->weak_from_this(), prop, oldVal, newVal});
+        } else {
+            m_tree->handlePropertyChange(node, prop, oldVal, newVal);
+        }
+    }
+
+private:
+    SceneTree* m_tree;
+};
 
 SceneTree::SceneTree(std::shared_ptr<SceneNode> root) : m_root(std::move(root)) {
     if (!m_root) {
         throw std::invalid_argument("SceneTree root cannot be null.");
     }
+    m_node_observer = std::make_unique<SceneNodePropertyObserver>(this);
     buildNodeMap(m_root);
 }
-
 SceneTree::~SceneTree() {
     for (auto const& [id, node_ptr] : m_node_lookup) {
-        node_ptr->unregisterObserver(this);
+        node_ptr->unregisterObserver(m_node_observer.get());
     }
 }
 
@@ -292,7 +315,7 @@ std::unique_ptr<SceneTree> SceneTree::detach(SceneNode* parentNode, SceneNode* c
             }
 
             // Stop observing
-            node_ptr->unregisterObserver(this);
+            node_ptr->unregisterObserver(m_node_observer.get());
         }
     }
     
@@ -369,22 +392,6 @@ void SceneTree::processEvents() {
                 handlePropertyChange(node_ptr.get(), event.prop, event.oldVal, event.newVal);
             }
         }
-    }
-}
-
-void SceneTree::onNodePropertyChanged(SceneNode* node, NodeProperty prop, const std::any& oldVal, const std::any& newVal) {
-    if (prop == NodeProperty::IsDirty) {
-        m_dirty_nodes.push_back(node->weak_from_this());
-        if (!m_batching_enabled) {
-            processEvents();
-        }
-        return;
-    }
-
-    if (m_batching_enabled) {
-        m_event_queue.push_back({node->weak_from_this(), prop, oldVal, newVal});
-    } else {
-        handlePropertyChange(node, prop, oldVal, newVal);
     }
 }
 
@@ -482,7 +489,7 @@ void SceneTree::buildNodeMap(const std::shared_ptr<SceneNode>& node) {
 
     for (const auto& tag : node->getTags()) m_tag_lookup[tag].push_back(node.get());
     
-    node->registerObserver(this);
+    node->registerObserver(m_node_observer.get());
 
     for (const auto& child : node->getChildren()) {
         buildNodeMap(child);
@@ -514,7 +521,7 @@ void SceneTree::removeNodeMap(const std::shared_ptr<SceneNode>& node) {
         }
     }
 
-    node->unregisterObserver(this);
+    node->unregisterObserver(m_node_observer.get());
 
     for (const auto& child : node->getChildren()) {
         removeNodeMap(child);

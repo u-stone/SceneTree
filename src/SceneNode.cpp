@@ -29,11 +29,9 @@ void SceneNode::setName(const std::string& name) {
     if (m_name == name) return;
     if (!isPropertyDirty(NodeProperty::Name)) {
         m_clean_name = m_name;
-        m_name = name;
-        markDirty(NodeProperty::Name);
-    } else {
-        m_name = name;
     }
+    m_name = name;
+    markDirty(NodeProperty::Name);
 }
 
 ObjectStatus SceneNode::getStatus() const {
@@ -44,11 +42,9 @@ void SceneNode::setStatus(ObjectStatus status) {
     if (m_status == status) return;
     if (!isPropertyDirty(NodeProperty::Status)) {
         m_clean_status = m_status;
-        m_status = status;
-        markDirty(NodeProperty::Status);
-    } else {
-        m_status = status;
     }
+    m_status = status;
+    markDirty(NodeProperty::Status);
 }
 
 void SceneNode::markDirty(NodeProperty prop) {
@@ -113,7 +109,6 @@ void SceneNode::registerObserver(INodeObserver* observer) {
         m_observers.push_back(observer);
     }
 }
-
 void SceneNode::unregisterObserver(INodeObserver* observer) {
     m_observers.erase(std::remove(m_observers.begin(), m_observers.end(), observer), m_observers.end());
 }

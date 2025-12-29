@@ -7,7 +7,8 @@
 #include <any>
 #include <functional>
 
-class SceneTree : public INodeObserver {
+class SceneTree {
+private:
 public:
     explicit SceneTree(std::shared_ptr<SceneNode> root);
     virtual ~SceneTree();
@@ -35,7 +36,6 @@ public:
     // Detaches a subtree starting at childNode from its parent parentNode
     std::unique_ptr<SceneTree> detach(SceneNode* parentNode, SceneNode* childNode);
 
-    // Batching mechanism for property changes
     void setBatchingEnabled(bool enabled);
     void processEvents();
 
@@ -47,9 +47,6 @@ public:
     void addPropertyListener(NodeProperty prop, PropertyListener listener);
     void addNodePropertyListener(ObjectId id, NodeProperty prop, PropertyListener listener);
 
-    // INodeObserver implementation
-    void onNodePropertyChanged(SceneNode* node, NodeProperty prop, const std::any& oldVal, const std::any& newVal) override;
-
     std::shared_ptr<SceneNode> getRoot() const;
 
     void print() const;
@@ -59,6 +56,7 @@ private:
     void removeNodeMap(const std::shared_ptr<SceneNode>& node);
     void resolveDirtyNode(SceneNode* node);
     void handlePropertyChange(SceneNode* node, NodeProperty prop, const std::any& oldVal, const std::any& newVal);
+    friend class SceneNodePropertyObserver;
 
     struct PendingEvent {
         std::weak_ptr<SceneNode> node;
@@ -71,6 +69,7 @@ private:
     bool m_batching_enabled = false;
 
 
+    std::unique_ptr<INodeObserver> m_node_observer;
     std::shared_ptr<SceneNode> m_root;
     std::unordered_map<ObjectId, SceneNode*> m_node_lookup;
     std::unordered_map<std::string, std::vector<SceneNode*>> m_name_lookup;
