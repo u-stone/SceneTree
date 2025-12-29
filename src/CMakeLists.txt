@@ -6,12 +6,14 @@ add_library(SceneTreeLib STATIC
     SceneTree.cpp
     SceneManager.cpp
     SceneIO.cpp
+    SceneNodePropertyObserver.cpp
     Scene.h
     SceneNode.h
     SceneTree.h
     SceneManager.h
     SceneObject.h
     SceneIO.h
+    SceneNodePropertyObserver.h
 )
 
 # Make the headers available to other targets (like examples and tests)

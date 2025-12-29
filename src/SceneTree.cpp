@@ -1,32 +1,9 @@
 #include "SceneTree.h"
+#include "SceneNodePropertyObserver.h"
 #include <stdexcept>
 #include <vector>
 #include <algorithm>
 #include <iostream>
-
-class SceneNodePropertyObserver : public INodeObserver {
-public:
-    explicit SceneNodePropertyObserver(SceneTree* tree) : m_tree(tree) {}
-
-    void onNodePropertyChanged(SceneNode* node, NodeProperty prop, const std::any& oldVal, const std::any& newVal) override {
-        if (prop == NodeProperty::IsDirty) {
-            m_tree->m_dirty_nodes.push_back(node->weak_from_this());
-            if (!m_tree->m_batching_enabled) {
-                m_tree->processEvents();
-            }
-            return;
-        }
-
-        if (m_tree->m_batching_enabled) {
-            m_tree->m_event_queue.push_back({node->weak_from_this(), prop, oldVal, newVal});
-        } else {
-            m_tree->handlePropertyChange(node, prop, oldVal, newVal);
-        }
-    }
-
-private:
-    SceneTree* m_tree;
-};
 
 SceneTree::SceneTree(std::shared_ptr<SceneNode> root) : m_root(std::move(root)) {
     if (!m_root) {
