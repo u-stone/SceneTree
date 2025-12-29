@@ -1,6 +1,7 @@
 #include "SceneManager.h"
 #include "SceneIO.h"
 #include <stdexcept>
+#include <algorithm>
 #include <chrono>
 
 SceneManager::SceneManager() : m_active_scene_tree(nullptr) {}
@@ -101,17 +102,27 @@ std::shared_ptr<AsyncOperation> SceneManager::preloadSceneAsync(const std::strin
         return std::make_shared<AsyncOperation>(p.get_future());
     }
 
+    // Check if a loading task for this scene is already in progress
+    auto it = std::find_if(m_loading_tasks.begin(), m_loading_tasks.end(),
+                           [&sceneName](const LoadingTask& t) { return t.name == sceneName; });
+
     std::promise<bool> promise;
     auto future = promise.get_future();
-    m_loading_tasks.push_back({
-        sceneName,
-        std::async(std::launch::async, [filepath]() {
-            return SceneIO::loadSceneTree(filepath);
-        }),
-        std::move(callback),
-        false, // autoSwitch = false for preload
-        std::move(promise)
+
+    if (it != m_loading_tasks.end()) {
+        // Merge request into existing task
+        it->requests.push_back({ std::move(callback), std::move(promise), false });
+        return std::make_shared<AsyncOperation>(std::move(future));
+    }
+
+    LoadingTask task;
+    task.name = sceneName;
+    task.future = std::async(std::launch::async, [filepath]() {
+        return SceneIO::loadSceneTree(filepath);
     });
+    task.requests.push_back({ std::move(callback), std::move(promise), false });
+    m_loading_tasks.push_back(std::move(task));
+
     return std::make_shared<AsyncOperation>(std::move(future));
 }
 
@@ -124,17 +135,27 @@ std::shared_ptr<AsyncOperation> SceneManager::loadSceneAsync(const std::string& 
         return std::make_shared<AsyncOperation>(p.get_future());
     }
 
+    // Check if a loading task for this scene is already in progress
+    auto it = std::find_if(m_loading_tasks.begin(), m_loading_tasks.end(),
+                           [&sceneName](const LoadingTask& t) { return t.name == sceneName; });
+
     std::promise<bool> promise;
     auto future = promise.get_future();
-    m_loading_tasks.push_back({
-        sceneName,
-        std::async(std::launch::async, [filepath]() {
-            return SceneIO::loadSceneTree(filepath);
-        }),
-        std::move(callback),
-        true, // autoSwitch = true for load
-        std::move(promise)
+
+    if (it != m_loading_tasks.end()) {
+        // Merge request into existing task
+        it->requests.push_back({ std::move(callback), std::move(promise), true });
+        return std::make_shared<AsyncOperation>(std::move(future));
+    }
+
+    LoadingTask task;
+    task.name = sceneName;
+    task.future = std::async(std::launch::async, [filepath]() {
+        return SceneIO::loadSceneTree(filepath);
     });
+    task.requests.push_back({ std::move(callback), std::move(promise), true });
+    m_loading_tasks.push_back(std::move(task));
+
     return std::make_shared<AsyncOperation>(std::move(future));
 }
 
@@ -159,14 +180,15 @@ std::shared_ptr<AsyncOperation> SceneManager::unloadSceneAsync(const std::string
     if (treeToUnload) {
         std::promise<bool> promise;
         auto future = promise.get_future();
-        m_unloading_tasks.push_back({
-            sceneName,
-            std::async(std::launch::async, [tree = std::move(treeToUnload)]() {
-                // Destruction happens here in background thread
-            }),
-            std::move(callback),
-            std::move(promise)
+        UnloadingTask task;
+        task.name = sceneName;
+        task.future = std::async(std::launch::async, [tree = std::move(treeToUnload)]() {
+            // Destruction happens here in background thread
         });
+        task.callback = std::move(callback);
+        task.promise = std::move(promise);
+        m_unloading_tasks.push_back(std::move(task));
+
         return std::make_shared<AsyncOperation>(std::move(future));
     } else {
         if (callback) callback(sceneName, false); // Scene not found in memory
@@ -188,7 +210,16 @@ void SceneManager::update() {
                     m_preloaded_trees[it->name] = std::move(tree);
                     success = true;
 
-                    if (it->autoSwitch) {
+                    // If any request in the merged task requires an auto-switch, perform it
+                    bool shouldSwitch = false;
+                    for (const auto& req : it->requests) {
+                        if (req.autoSwitch) {
+                            shouldSwitch = true;
+                            break;
+                        }
+                    }
+
+                    if (shouldSwitch) {
                         success = switchToScene(it->name);
                     }
                 }
@@ -196,10 +227,11 @@ void SceneManager::update() {
                 // In a real engine, you'd log this error to a proper logging system
             }
 
-            if (it->callback) {
-                it->callback(it->name, success);
+            // Notify all merged requests
+            for (auto& req : it->requests) {
+                if (req.callback) req.callback(it->name, success);
+                req.promise.set_value(success);
             }
-            it->promise.set_value(success);
 
             it = m_loading_tasks.erase(it);
         } else {

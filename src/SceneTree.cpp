@@ -3,6 +3,7 @@
 #include <stdexcept>
 #include <vector>
 #include <algorithm>
+#include <unordered_set>
 #include <iostream>
 
 SceneTree::SceneTree(std::shared_ptr<SceneNode> root) : m_root(std::move(root)) {

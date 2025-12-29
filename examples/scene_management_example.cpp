@@ -280,6 +280,27 @@ int main() {
                 }
             }
 
+            // 12. Demonstrate Async Polling (AsyncOperation)
+            std::cout << "\n---- Demonstrating Async Polling ----" << std::endl;
+            std::string poll_file = (dataDir / "poll_scene.json").string();
+            {
+                std::ofstream ofs(poll_file);
+                ofs << "{\"format_version\": 1, \"root\": {\"id\": 2000, \"name\": \"PollNode\", \"status\": \"Active\"}}";
+            }
+
+            std::cout << "Starting async load of 'PollLevel' with polling..." << std::endl;
+            auto op = manager->loadSceneAsync("PollLevel", poll_file);
+            
+            while (!op->IsDone()) {
+                std::cout << "  Polling: Task not done yet..." << std::endl;
+                manager->update();
+                std::this_thread::sleep_for(std::chrono::milliseconds(50));
+            }
+
+            if (op->GetResult()) {
+                std::cout << "PollLevel loaded and activated! Current root: " << manager->getActiveSceneTree()->getRoot()->getName() << std::endl;
+            }
+
         } else {
             std::cerr << "Attach failed!" << std::endl;
         }

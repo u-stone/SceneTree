@@ -107,3 +107,48 @@ TEST_F(SceneManagerAsyncTest, UnloadAsync) {
     EXPECT_FALSE(manager.isSceneReady("ToUnload"));
     EXPECT_TRUE(callbackCalled);
 }
+
+TEST_F(SceneManagerAsyncTest, AsyncOperationPolling) {
+    SceneManager manager;
+    auto op = manager.preloadSceneAsync("AsyncScene", sceneFile.string());
+
+    ASSERT_NE(op, nullptr);
+    
+    int attempts = 0;
+    while (!op->IsDone() && attempts < 100) {
+        manager.update();
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        attempts++;
+    }
+
+    EXPECT_TRUE(op->IsDone());
+    EXPECT_TRUE(op->GetResult());
+    EXPECT_TRUE(manager.isSceneReady("AsyncScene"));
+}
+
+TEST_F(SceneManagerAsyncTest, TaskMerging) {
+    SceneManager manager;
+    
+    // Start two requests for the same scene
+    auto op1 = manager.preloadSceneAsync("MergedScene", sceneFile.string());
+    auto op2 = manager.loadSceneAsync("MergedScene", sceneFile.string());
+
+    ASSERT_NE(op1, nullptr);
+    ASSERT_NE(op2, nullptr);
+    
+    int attempts = 0;
+    while ((!op1->IsDone() || !op2->IsDone()) && attempts < 100) {
+        manager.update();
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        attempts++;
+    }
+
+    EXPECT_TRUE(op1->IsDone());
+    EXPECT_TRUE(op2->IsDone());
+    EXPECT_TRUE(op1->GetResult());
+    EXPECT_TRUE(op2->GetResult());
+    
+    // Verify that the second request (loadSceneAsync) triggered the switch
+    ASSERT_NE(manager.getActiveSceneTree(), nullptr);
+    EXPECT_EQ(manager.getActiveSceneTree()->getRoot()->getName(), "AsyncRoot");
+}

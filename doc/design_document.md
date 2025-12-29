@@ -2,17 +2,19 @@
 
 ## 1. Introduction
 
-This document outlines the design and architecture of the SceneTree management system. The system is designed to provide a flexible and efficient way to manage complex scene hierarchies in a game engine. The core requirement is to support multi-parented scene graphs, where a single scene node or an entire scene tree can be a child of multiple parent scenes simultaneously. This creates a Directed Acyclic Graph (DAG) rather than a simple tree structure.
+This document outlines the design and architecture of the SceneTree management system. The system provides a flexible and high-performance way to manage complex scene hierarchies. Beyond supporting Directed Acyclic Graphs (DAG) via multi-parenting, the system incorporates performance optimizations like batched property updates, asynchronous resource loading, and a decoupled observer architecture.
 
 ## 2. Core Components
 
-The system is composed of five main classes:
+The system is composed of the following core components:
 
 -   `Scene`: Manages a collection of game objects for a specific scene.
 -   `SceneNode`: Represents a node within the scene graph (SceneTree).
 -   `SceneTree`: Represents a hierarchy of `SceneNode`s.
 -   `SceneManager`: A high-level manager for loading, unloading, and switching between scenes.
 -   `SceneIO`: A utility class for serializing and deserializing scene trees to/from JSON.
+-   `AsyncOperation`: A handle for polling and managing the state of asynchronous tasks.
+-   `SceneNodePropertyObserver`: An intermediate layer that decouples property change logic from the tree structure.
 
 ## 3. Data Structures and Algorithms
 
@@ -33,13 +35,15 @@ A `SceneTree` encapsulates a scene graph.
 
 -   **Root Node**: A `std::shared_ptr<SceneNode>` acts as the root of the tree/sub-graph.
 -   **Fast Node Lookup**: `std::unordered_map<ObjectId, SceneNode*> m_node_lookup;`. This map provides average O(1) time complexity for finding any node in the tree by its unique `ObjectId`. The map stores raw pointers for performance, assuming the `SceneTree` itself manages the lifetime of its nodes through the `m_root`'s ownership of all its children.
+-   **Batching System**: When enabled, property changes (like name or status) are queued. The `update(deltaTime)` method processes these "dirty" nodes in a single pass, minimizing the overhead of updating internal lookup maps.
 -   **Name-based Lookup**: `std::unordered_map<std::string, std::vector<SceneNode*>> m_name_lookup;`.
     -   **Global Lookup**: Provides O(1) access to all nodes with a specific name. Supports duplicate names by storing a vector of pointers.
-    -   **Scoped Lookup**: Finds nodes by name within a specific subtree. Instead of traversing the subtree (O(N)), it retrieves all nodes with the target name from the global map and checks if they are descendants of the start node (Ancestry Check).
+    -   **Scoped Lookup**: Finds nodes by name within a specific subtree. It retrieves candidates from the global map and performs an optimized **Ancestry Check** using an iterative BFS with a visited set to handle deep trees and DAGs efficiently.
     -   **Hierarchical Lookup**: Delegates to `SceneNode`'s recursive search for DFS-based lookups (`findFirstChildNodeByName`).
-    -   **Tag-based Lookup**: `std::unordered_map<std::string, std::vector<SceneNode*>> m_tag_lookup;`.
-        -   Provides O(1) access to groups of nodes categorized by functional tags (e.g., "Enemy", "Interactable", "Checkpoint").
-        -   Essential for script systems to efficiently query sets of objects without traversing the hierarchy or relying on unique names.
+
+-   **Tag-based Lookup**: `std::unordered_map<std::string, std::vector<SceneNode*>> m_tag_lookup;`.
+    -   Provides O(1) access to groups of nodes categorized by functional tags (e.g., "Enemy", "Interactable", "Checkpoint").
+    -   Essential for script systems to efficiently query sets of objects without traversing the hierarchy or relying on unique names.
 
 -   **Attach/Detach Algorithm**:
     -   `attach(parentNode, childTree)`:
@@ -63,12 +67,18 @@ The `SceneManager` orchestrates the overall scene lifecycle.
 
 -   **Scene Management**: `std::unordered_map<std::string, std::shared_ptr<Scene>> m_scenes;`. Stores all available scenes, mapped by a string name for easy access.
 -   **Active Scene Tree**: `std::unique_ptr<SceneTree> m_active_scene_tree;`. The manager owns the main, active scene graph that represents the currently rendered world.
--   **Scene Switching (`switchToScene`)**: This is a high-level operation that would typically involve:
-    1.  Creating a new, empty `SceneTree`.
-    2.  Loading a target `Scene` from the scene map.
-    3.  Building a `SceneTree` from the objects in that `Scene`.
-    4.  Potentially attaching other `SceneTree`s (e.g., a persistent UI scene) to the new active tree.
-    5.  Replacing the old `m_active_scene_tree` with the new one. This automatically triggers the destruction of the old tree and all its nodes, correctly decrementing `shared_ptr` counts.
+-   **Asynchronous Loading**: Supports `loadSceneAsync` and `preloadSceneAsync`. These methods offload I/O and tree construction to background threads, returning a `shared_ptr<AsyncOperation>` for polling.
+-   **Task Merging**: If multiple requests are made for the same scene simultaneously, the manager merges them into a single loading task, notifying all callers upon completion.
+-   **Asynchronous Unloading**: `unloadSceneAsync` moves the destruction of large scene trees to a background thread, preventing frame-rate spikes on the main thread.
+-   **Update Loop**: The `update()` method must be called per frame to harvest completed async tasks and trigger callbacks on the main thread.
+
+### 3.5. `AsyncOperation`: Polling Handle
+
+The `AsyncOperation` class provides a thread-safe way to track the progress of asynchronous tasks.
+
+-   **IsDone()**: Non-blocking check for completion.
+-   **GetResult()**: Retrieves the success/failure result, blocking only if the task is still in progress.
+-   **Callbacks**: Supports optional `SceneAsyncCallback` for event-driven completion handling.
 
 ### 3.5. `SceneIO`: Serialization
 
@@ -76,8 +86,9 @@ The `SceneIO` class handles the persistence of scene data.
 
 -   **Format**: JSON (via RapidJSON library).
 -   **Functionality**:
-    -   `saveSceneTree`: Serializes a `SceneTree` structure, including node properties (ID, Name, Status) and hierarchy, to a file.
+    -   `saveSceneTree`: Serializes a `SceneTree` structure, including node properties (ID, Name, Status, Tags) and hierarchy.
     -   `loadSceneTree`: Parses a JSON file to reconstruct a `SceneTree` object.
+-   **Versioning**: Includes a `format_version` field to ensure forward and backward compatibility as the scene schema evolves.
 
 ## 4. Design Choices and Justification
 
@@ -87,7 +98,10 @@ The `SceneIO` class handles the persistence of scene data.
 -   **Strongly Typed IDs (`ObjectId`)**: Encapsulating the ID in a class (`ObjectIdType<T>`) prevents type mismatch errors (e.g., passing an integer where an ID is expected) and allows changing the underlying ID type (e.g., to `std::string` or UUID) with minimal code changes.
 -   **Decoupling of `Scene` and `SceneTree`**: The `Scene` holds the "what" (the data/objects), and the `SceneTree` holds the "where" (the spatial/hierarchical relationships). This separation of concerns makes the system more flexible. For instance, the same `Scene` data could be represented by different `SceneTree` arrangements.
 -   **Serialization Strategy**: Using RapidJSON provides a fast and standard way to interchange data. The recursive structure of the JSON directly maps to the recursive structure of the Scene Tree.
+-   **Batching and Update Loop**: By deferring index updates to a single point in the frame, we trade immediate consistency for significantly higher throughput, which is essential for dynamic scenes.
+-   **Async/Polling Hybrid**: Providing both callbacks and polling handles (`AsyncOperation`) gives developers the flexibility to use the pattern that best fits their specific use case (e.g., UI vs. State Machines).
+-   **Observer Decoupling**: Using `SceneNodePropertyObserver` prevents `SceneTree` from becoming a "God Object" and allows for specialized handling strategies based on node types.
 
 ## 5. Conclusion
 
-This design provides a robust, flexible, and efficient foundation for scene management. By using a DAG, smart pointers, and hash-based lookups, it meets all the core requirements, including multi-parenting, fast queries, and clean resource management through attach/detach and scene switching operations.
+This design provides a robust, flexible, and high-performance foundation for scene management. By combining DAG structures, smart pointers, batched updates, and asynchronous I/O, it meets the demands of modern game engines for both complexity and efficiency.

@@ -67,12 +67,16 @@ public:
 
 
 private:
+    struct AsyncRequest {
+        SceneAsyncCallback callback;
+        std::promise<bool> promise;
+        bool autoSwitch;
+    };
+
     struct LoadingTask {
         std::string name;
         std::future<std::unique_ptr<SceneTree>> future;
-        SceneAsyncCallback callback;
-        bool autoSwitch;
-        std::promise<bool> promise;
+        std::vector<AsyncRequest> requests;
     };
 
     struct UnloadingTask {
