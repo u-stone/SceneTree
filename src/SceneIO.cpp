@@ -3,62 +3,39 @@
 #include <fstream>
 #include <iostream>
 #include <vector>
+#include <nlohmann/json.hpp>
 
-// RapidJSON headers
-#include "rapidjson/document.h"
-#include "rapidjson/istreamwrapper.h"
-#include "rapidjson/ostreamwrapper.h"
-#include "rapidjson/writer.h"
-#include "rapidjson/stringbuffer.h"
-#include "rapidjson/prettywriter.h" // For human-readable JSON
-
-using namespace rapidjson;
+using json = nlohmann::json;
 
 static const int CURRENT_FORMAT_VERSION = 1;
 
 // Helper function to serialize a single node recursively
-static void serializeNode(PrettyWriter<OStreamWrapper>& writer, const std::shared_ptr<SceneNode>& node) {
+static void serializeNode(json& j_node, const std::shared_ptr<SceneNode>& node) {
     if (!node) return;
 
-    writer.StartObject();
-
-    // --- Core Properties ---
-    writer.Key("id");
-    writer.Uint(node->getId().raw());
-
-    writer.Key("name");
-    writer.String(node->getName().c_str());
-
-    writer.Key("status");
-    writer.String(statusToString(node->getStatus()).c_str());
+    j_node["id"] = node->getId().raw();
+    j_node["name"] = node->getName();
+    j_node["status"] = statusToString(node->getStatus());
 
     // --- Tags ---
     const auto& tags = node->getTags();
     if (!tags.empty()) {
-        writer.Key("tags");
-        writer.StartArray();
-        for (const auto& tag : tags) {
-            writer.String(tag.c_str());
-        }
-        writer.EndArray();
+        j_node["tags"] = tags;
     }
 
     // --- Future Extensions ---
-    // You can add more properties here, e.g.:
-    // writer.Key("transform"); writer.StartObject(); ... writer.EndObject();
 
     // --- Children (Recursive) ---
     const auto& children = node->getChildren();
     if (!children.empty()) {
-        writer.Key("children");
-        writer.StartArray();
+        json j_children = json::array();
         for (const auto& child : children) {
-            serializeNode(writer, child);
+            json j_child;
+            serializeNode(j_child, child);
+            j_children.push_back(j_child);
         }
-        writer.EndArray();
+        j_node["children"] = j_children;
     }
-
-    writer.EndObject();
 }
 
 bool SceneIO::saveSceneTree(const SceneTree& tree, const std::string& filepath) {
@@ -74,52 +51,46 @@ bool SceneIO::saveSceneTree(const SceneTree& tree, const std::string& filepath) 
         return false;
     }
 
-    OStreamWrapper osw(ofs);
-    PrettyWriter<OStreamWrapper> writer(osw);
+    json j;
+    j["format_version"] = CURRENT_FORMAT_VERSION;
+    
+    json j_root;
+    serializeNode(j_root, root);
+    j["root"] = j_root;
 
-    // Wrap the output in a versioned object
-    writer.StartObject();
-
-    writer.Key("format_version");
-    writer.Int(CURRENT_FORMAT_VERSION);
-
-    writer.Key("root");
-    serializeNode(writer, root);
-    writer.EndObject();
-
+    ofs << j.dump(4);
     return true;
 }
 
 // Helper function to deserialize a single node recursively
-static std::shared_ptr<SceneNode> deserializeNode(const Value& val, int version) {
-    if (!val.IsObject()) return nullptr;
+static std::shared_ptr<SceneNode> deserializeNode(const json& val, int version) {
+    if (!val.is_object()) return nullptr;
 
     // --- Core Properties ---
-    if (!val.HasMember("id") || !val["id"].IsUint()) {
+    if (!val.contains("id") || !val["id"].is_number_unsigned()) {
         std::cerr << "[SceneIO] Warning: Node missing valid 'id'." << std::endl;
         return nullptr;
     }
-    ObjectId id(val["id"].GetUint());
+    ObjectId id(val["id"].get<unsigned int>());
 
     std::string name = "Unnamed";
-    if (val.HasMember("name") && val["name"].IsString()) {
-        name = val["name"].GetString();
+    if (val.contains("name") && val["name"].is_string()) {
+        name = val["name"].get<std::string>();
     }
 
     ObjectStatus status = ObjectStatus::Active;
-    if (val.HasMember("status") && val["status"].IsString()) {
-        status = statusFromString(val["status"].GetString());
+    if (val.contains("status") && val["status"].is_string()) {
+        status = statusFromString(val["status"].get<std::string>());
     }
 
     // Create the node
     auto node = std::make_shared<SceneNode>(id, name, status);
 
     // --- Tags ---
-    if (val.HasMember("tags") && val["tags"].IsArray()) {
-        const Value& tags = val["tags"];
-        for (SizeType i = 0; i < tags.Size(); i++) {
-            if (tags[i].IsString()) {
-                node->addTag(tags[i].GetString());
+    if (val.contains("tags") && val["tags"].is_array()) {
+        for (const auto& tag : val["tags"]) {
+            if (tag.is_string()) {
+                node->addTag(tag.get<std::string>());
             }
         }
     }
@@ -128,10 +99,9 @@ static std::shared_ptr<SceneNode> deserializeNode(const Value& val, int version)
     // Parse additional properties here
 
     // --- Children (Recursive) ---
-    if (val.HasMember("children") && val["children"].IsArray()) {
-        const Value& children = val["children"];
-        for (SizeType i = 0; i < children.Size(); i++) {
-            auto childNode = deserializeNode(children[i], version);
+    if (val.contains("children") && val["children"].is_array()) {
+        for (const auto& childVal : val["children"]) {
+            auto childNode = deserializeNode(childVal, version);
             if (childNode) {
                 node->addChild(childNode);
             }
@@ -148,16 +118,15 @@ std::unique_ptr<SceneTree> SceneIO::loadSceneTree(const std::string& filepath) {
         return nullptr;
     }
 
-    IStreamWrapper isw(ifs);
-    Document doc;
-    doc.ParseStream(isw);
-
-    if (doc.HasParseError()) {
-        std::cerr << "[SceneIO] JSON Parse Error: " << doc.GetParseError() << std::endl;
+    json doc;
+    try {
+        ifs >> doc;
+    } catch (const json::parse_error& e) {
+        std::cerr << "[SceneIO] JSON Parse Error: " << e.what() << std::endl;
         return nullptr;
     }
 
-    if (!doc.IsObject()) {
+    if (!doc.is_object()) {
         return nullptr;
     }
 
@@ -165,14 +134,14 @@ std::unique_ptr<SceneTree> SceneIO::loadSceneTree(const std::string& filepath) {
     int version = 0;
 
     // Check for versioning
-    if (doc.HasMember("format_version") && doc["format_version"].IsInt()) {
-        version = doc["format_version"].GetInt();
+    if (doc.contains("format_version") && doc["format_version"].is_number_integer()) {
+        version = doc["format_version"].get<int>();
         
         if (version > CURRENT_FORMAT_VERSION) {
             std::cerr << "[SceneIO] Warning: File version (" << version << ") is newer than supported version (" << CURRENT_FORMAT_VERSION << ")." << std::endl;
         }
 
-        if (doc.HasMember("root")) {
+        if (doc.contains("root")) {
             rootNode = deserializeNode(doc["root"], version);
         }
     } else {

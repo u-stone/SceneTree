@@ -1,6 +1,17 @@
 cmake_minimum_required(VERSION 3.15)
 project(SceneTree LANGUAGES CXX)
 
+# --- CMake Policy Management ---
+# A helper macro to set CMake policies if they are supported by the current CMake version
+macro(set_cmake_policy_if_supported policy_id behavior)
+    if(POLICY ${policy_id})
+        cmake_policy(SET ${policy_id} ${behavior})
+    endif()
+endmacro()
+
+set_cmake_policy_if_supported(CMP0135 NEW)
+# set_cmake_policy_if_supported(CMP0167 NEW)
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -42,21 +53,13 @@ FetchContent_Declare(
 set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(googletest)
 
-# --- RapidJSON ---
+# --- nlohmann_json ---
 FetchContent_Declare(
-  rapidjson
-  URL "https://github.com/Tencent/rapidjson/archive/refs/tags/v1.1.0.zip"
+  json
+  URL "https://github.com/nlohmann/json/releases/download/v3.11.3/json.tar.xz"
 )
-set(RAPIDJSON_BUILD_DOC OFF CACHE BOOL "" FORCE)
-set(RAPIDJSON_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-set(RAPIDJSON_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-FetchContent_MakeAvailable(rapidjson)
-
-# RapidJSON v1.1.0 does not define a CMake target, so we define one manually.
-if(NOT TARGET rapidjson)
-    add_library(rapidjson INTERFACE)
-    target_include_directories(rapidjson INTERFACE ${rapidjson_SOURCE_DIR}/include)
-endif()
+set(JSON_BuildTests OFF CACHE INTERNAL "")
+FetchContent_MakeAvailable(json)
 
 # --- Testing ---
 enable_testing()
