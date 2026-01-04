@@ -98,8 +98,12 @@ int main() {
             auto props_root = active_tree->findNode(100);
             auto env_node_ptr = active_tree->findNode(20);
             if (props_root && env_node_ptr) {
+                std::cout << "Before detaching PropsRoot from Environment..." << std::endl;
+                active_tree->print();
                 auto detached_props = active_tree->detach(env_node_ptr, props_root);
                 std::cout << "Hierarchical search for 'Lamp' in World Tree: " << (active_tree->findFirstChildNodeByName("Lamp") ? "Found" : "Not Found") << std::endl;
+                std::cout << "Detached Props Tree:" << std::endl;
+                detached_props->print();
             }
 
             // 5. Demonstrate multi-parenting
