@@ -1,5 +1,5 @@
-#include "SceneNode.h"
-#include "SceneObject.h"
+#include "SceneTree/SceneNode.h"
+#include "SceneTree/SceneObject.h"
 #include <algorithm>
 #include <stdexcept>
 

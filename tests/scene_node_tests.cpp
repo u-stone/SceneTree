@@ -1,5 +1,5 @@
 #include "gtest/gtest.h"
-#include "SceneNode.h"
+#include "SceneTree/SceneNode.h"
 #include <stdexcept>
 
 TEST(SceneNodeTest, Creation) {

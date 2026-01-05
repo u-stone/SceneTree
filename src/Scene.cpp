@@ -1,4 +1,4 @@
-#include "Scene.h"
+#include "SceneTree/Scene.h"
 #include <algorithm>
 
 Scene::Scene(std::string name) : m_name(std::move(name)) {}

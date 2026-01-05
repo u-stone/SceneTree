@@ -1,5 +1,5 @@
-#include "SceneIO.h"
-#include "SceneObject.h"
+#include "SceneTree/SceneIO.h"
+#include "SceneTree/SceneObject.h"
 #include <fstream>
 #include <iostream>
 #include <vector>

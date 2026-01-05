@@ -2,7 +2,7 @@
 
 #include <string>
 #include <memory>
-#include "SceneTree.h"
+#include "SceneTree/SceneTree.h"
 
 class SceneIO {
 public:

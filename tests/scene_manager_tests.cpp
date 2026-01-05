@@ -1,6 +1,6 @@
 #include "gtest/gtest.h"
-#include "SceneManager.h"
-#include "SceneIO.h"
+#include "SceneTree/SceneManager.h"
+#include "SceneTree/SceneIO.h"
 #include <filesystem>
 #include <fstream>
 #include <thread>

@@ -1,5 +1,5 @@
 #pragma once
-#include "SceneNode.h"
+#include "SceneTree/SceneNode.h"
 #include <any>
 
 class SceneTree;

@@ -61,6 +61,13 @@ FetchContent_Declare(
 set(JSON_BuildTests OFF CACHE INTERNAL "")
 FetchContent_MakeAvailable(json)
 
+# --- TaskEngine ---
+FetchContent_Declare(
+  TaskEngine
+  URL "https://github.com/u-stone/TaskSysten/archive/refs/tags/v0.0.3.zip"
+)
+FetchContent_MakeAvailable(TaskEngine)
+
 # --- Testing ---
 enable_testing()
 add_subdirectory(tests)

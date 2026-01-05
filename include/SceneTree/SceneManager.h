@@ -8,8 +8,8 @@
 #include <functional>
 #include <optional>
 #include <chrono>
-#include "Scene.h"
-#include "SceneTree.h"
+#include "SceneTree/Scene.h"
+#include "SceneTree/SceneTree.h"
 
 class AsyncOperation {
 public:

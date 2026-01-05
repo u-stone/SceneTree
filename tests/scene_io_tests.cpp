@@ -1,7 +1,7 @@
 #include "gtest/gtest.h"
-#include "SceneIO.h"
-#include "SceneTree.h"
-#include "SceneNode.h"
+#include "SceneTree/SceneIO.h"
+#include "SceneTree/SceneTree.h"
+#include "SceneTree/SceneNode.h"
 #include <filesystem>
 #include <fstream>
 

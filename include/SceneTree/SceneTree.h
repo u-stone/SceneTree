@@ -2,8 +2,8 @@
 
 #include <memory>
 #include <unordered_map>
-#include "SceneNode.h"
-#include "Scene.h"
+#include "SceneTree/SceneNode.h"
+#include "SceneTree/Scene.h"
 #include <any>
 #include <functional>
 

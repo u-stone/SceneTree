@@ -4,7 +4,7 @@
 #include <unordered_map>
 #include <memory>
 #include <vector>
-#include "SceneObject.h"
+#include "SceneTree/SceneObject.h"
 
 class Scene {
 public:

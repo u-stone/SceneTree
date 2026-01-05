@@ -1,6 +1,6 @@
 #include "gtest/gtest.h"
-#include "SceneTree.h"
-#include "SceneNode.h"
+#include "SceneTree/SceneTree.h"
+#include "SceneTree/SceneNode.h"
 #include "Scene.h"
 #include <algorithm>
 

@@ -4,8 +4,8 @@
 #include <fstream>
 #include <thread>
 #include <chrono>
-#include "SceneManager.h"
-#include "SceneIO.h"
+#include "SceneTree/SceneManager.h"
+#include "SceneTree/SceneIO.h"
 
 int main() {
     try {

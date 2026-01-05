@@ -1,5 +1,5 @@
-#include "SceneTree.h"
-#include "SceneNodePropertyObserver.h"
+#include "SceneTree/SceneTree.h"
+#include "SceneTree/SceneNodePropertyObserver.h"
 #include <stdexcept>
 #include <vector>
 #include <algorithm>

@@ -8,7 +8,7 @@
 #include <any>
 #include <map>
 #include <cstdint>
-#include "SceneObject.h"
+#include "SceneTree/SceneObject.h"
 
 enum class NodeProperty : uint32_t {
     Name       = 1u << 0,
