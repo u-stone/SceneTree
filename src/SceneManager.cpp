@@ -1,10 +1,15 @@
 #include "SceneTree/SceneManager.h"
 #include "SceneTree/SceneIO.h"
+#include "TaskEngine/TaskExecutor.h"
 #include <stdexcept>
 #include <algorithm>
 #include <chrono>
 
-SceneManager::SceneManager() : m_active_scene_tree(nullptr) {}
+SceneManager::SceneManager() : m_active_scene_tree(nullptr) {
+    m_executor = std::make_unique<task_engine::TaskExecutor>();
+}
+
+SceneManager::~SceneManager() = default;
 
 void SceneManager::registerScene(std::shared_ptr<Scene> scene) {
     if (scene) {
@@ -117,9 +122,18 @@ std::shared_ptr<AsyncOperation> SceneManager::preloadSceneAsync(const std::strin
 
     LoadingTask task;
     task.name = sceneName;
-    task.future = std::async(std::launch::async, [filepath]() {
-        return SceneIO::loadSceneTree(filepath);
+    
+    auto taskPromise = std::make_shared<std::promise<std::unique_ptr<SceneTree>>>();
+    task.future = taskPromise->get_future();
+
+    m_executor->add_task(TASK_FROM_HERE, [filepath, taskPromise]() {
+        try {
+            taskPromise->set_value(SceneIO::loadSceneTree(filepath));
+        } catch (...) {
+            taskPromise->set_exception(std::current_exception());
+        }
     });
+
     task.requests.push_back({ std::move(callback), std::move(promise), false });
     m_loading_tasks.push_back(std::move(task));
 
@@ -150,9 +164,18 @@ std::shared_ptr<AsyncOperation> SceneManager::loadSceneAsync(const std::string& 
 
     LoadingTask task;
     task.name = sceneName;
-    task.future = std::async(std::launch::async, [filepath]() {
-        return SceneIO::loadSceneTree(filepath);
+    
+    auto taskPromise = std::make_shared<std::promise<std::unique_ptr<SceneTree>>>();
+    task.future = taskPromise->get_future();
+
+    m_executor->add_task(TASK_FROM_HERE, [filepath, taskPromise]() {
+        try {
+            taskPromise->set_value(SceneIO::loadSceneTree(filepath));
+        } catch (...) {
+            taskPromise->set_exception(std::current_exception());
+        }
     });
+
     task.requests.push_back({ std::move(callback), std::move(promise), true });
     m_loading_tasks.push_back(std::move(task));
 
@@ -182,8 +205,17 @@ std::shared_ptr<AsyncOperation> SceneManager::unloadSceneAsync(const std::string
         auto future = promise.get_future();
         UnloadingTask task;
         task.name = sceneName;
-        task.future = std::async(std::launch::async, [tree = std::move(treeToUnload)]() {
-            // Destruction happens here in background thread
+        
+        auto taskPromise = std::make_shared<std::promise<void>>();
+        task.future = taskPromise->get_future();
+        
+        // Convert unique_ptr to shared_ptr so it can be captured by the copyable std::function required by TaskExecutor
+        std::shared_ptr<SceneTree> sharedTree = std::move(treeToUnload);
+
+        m_executor->add_task(TASK_FROM_HERE, [tree = sharedTree, taskPromise]() mutable {
+            // Explicitly reset to force destruction on the worker thread before setting the value
+            tree.reset(); 
+            taskPromise->set_value();
         });
         task.callback = std::move(callback);
         task.promise = std::move(promise);

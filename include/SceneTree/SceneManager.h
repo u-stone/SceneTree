@@ -36,9 +36,14 @@ private:
     std::optional<bool> m_Result;
 };
 
+namespace task_engine {
+    class TaskExecutor;
+}
+
 class SceneManager {
 public:
     SceneManager();
+    ~SceneManager();
 
     void registerScene(std::shared_ptr<Scene> scene);
     bool switchToScene(const std::string& sceneName);
@@ -93,4 +98,5 @@ private:
 
     std::unique_ptr<SceneTree> m_active_scene_tree;
     std::string m_active_scene_name;
+    std::unique_ptr<task_engine::TaskExecutor> m_executor;
 };
